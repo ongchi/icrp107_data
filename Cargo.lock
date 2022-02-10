@@ -31,6 +31,15 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "fixed_width"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ddb322cf8613e4492247ffb689097faf15b65411ed27d814f65a4334ab1b540"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "fixed_width"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75be3c6ddf6a507c1c67a28e3afba683e6afe8bee452eabc443e01147cd9dbd2"
@@ -39,12 +48,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixed_width_derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eed35481f998ee2c494fba2e2cd91d46bc8d5c9856343f48fa37c32c5f85de38"
+dependencies = [
+ "fixed_width 0.3.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "icrp107_data"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitflags",
- "fixed_width",
+ "fixed_width 0.4.0",
+ "fixed_width_derive",
  "once_cell",
  "regex",
  "serde",

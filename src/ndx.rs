@@ -1,4 +1,4 @@
-use fixed_width::{Field, FixedWidth};
+use fixed_width_derive::FixedWidth;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -8,79 +8,56 @@ use super::spectrum::{NuclideSpectrum, Spectrum};
 use super::{ack, bet, nsf, rad};
 use super::{FileReader, ParseError};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, FixedWidth, Deserialize)]
 struct NdxEntry {
+    #[fixed_width(range = "0..7")]
     pub nuclide: Nuclide,
+    #[fixed_width(range = "7..17")]
     pub half_life: HalfLife,
+    #[fixed_width(range = "17..25")]
     pub decay_mode: DecayMode,
-    // pub rad_index: u64,
-    // pub bet_index: u64,
-    // pub ack_index: u64,
-    // pub nsf_index: u64,
+    #[fixed_width(range = "53..60")]
     pub d1: Option<Nuclide>,
-    // pub d1_ndx_index: Option<u64>,
+    #[fixed_width(range = "66..77")]
     pub d1_branch: Option<f64>,
+    #[fixed_width(range = "78..85")]
     pub d2: Option<Nuclide>,
-    // pub d2_ndx_index: Option<u64>,
+    #[fixed_width(range = "91..102")]
     pub d2_branch: Option<f64>,
+    #[fixed_width(range = "103..110")]
     pub d3: Option<Nuclide>,
-    // pub d3_ndx_index: Option<u64>,
+    #[fixed_width(range = "116..127")]
     pub d3_branch: Option<f64>,
+    #[fixed_width(range = "128..135")]
     pub d4: Option<Nuclide>,
-    // pub d4_ndx_index: Option<u64>,
+    #[fixed_width(range = "141..152")]
     pub d4_branch: Option<f64>,
+    #[fixed_width(range = "152..159")]
     pub alpha_energy: f64,
+    #[fixed_width(range = "159..167")]
     pub electron_energy: f64,
+    #[fixed_width(range = "167..175")]
     pub photon_energy: f64,
+    #[fixed_width(range = "175..179")]
     pub n_photon_le_10kev_per_nt: u64,
+    #[fixed_width(range = "179..183")]
     pub n_photon_gt_10kev_per_nt: u64,
+    #[fixed_width(range = "183..187")]
     pub n_beta_per_nt: u64,
+    #[fixed_width(range = "187..192")]
     pub n_mono_electron_per_nt: u64,
+    #[fixed_width(range = "192..196")]
     pub n_alpha_per_nt: u64,
+    #[fixed_width(range = "196..207")]
     pub amu: f64,
+    #[fixed_width(range = "207..217")]
     pub air_kerma_const: f64,
+    #[fixed_width(range = "217..226")]
     pub air_kerma_coef: f64,
 }
 
-impl FixedWidth for NdxEntry {
-    fn fields() -> Vec<Field> {
-        vec![
-            Field::default().range(0..7),
-            Field::default().range(7..17),
-            Field::default().range(17..25),
-            // Field::default().range(25..32),
-            // Field::default().range(32..39),
-            // Field::default().range(39..46),
-            // Field::default().range(46..52),
-            Field::default().range(53..60),
-            // Field::default().range(60..66),
-            Field::default().range(66..77),
-            Field::default().range(78..85),
-            // Field::default().range(85..91),
-            Field::default().range(91..102),
-            Field::default().range(103..110),
-            // Field::default().range(110..116),
-            Field::default().range(116..127),
-            Field::default().range(128..135),
-            // Field::default().range(135..141),
-            Field::default().range(141..152),
-            Field::default().range(152..159),
-            Field::default().range(159..167),
-            Field::default().range(167..175),
-            Field::default().range(175..179),
-            Field::default().range(179..183),
-            Field::default().range(183..187),
-            Field::default().range(187..192),
-            Field::default().range(192..196),
-            Field::default().range(196..207),
-            Field::default().range(207..217),
-            Field::default().range(217..226),
-        ]
-    }
-}
-
 #[derive(Debug)]
-pub struct Daughter {
+pub struct Progeny {
     pub branch_rate: f64,
     pub nuclide: Nuclide,
 }
@@ -89,7 +66,7 @@ pub struct Daughter {
 pub struct Attribute {
     pub half_life: HalfLife,
     pub decay_mode: DecayMode,
-    pub daughter: Vec<Daughter>,
+    pub progeny: Vec<Progeny>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
     pub photon_energy: f64,
@@ -120,38 +97,30 @@ impl NuclideData {
             let row: NdxEntry =
                 fixed_width::from_str(&buf).map_err(|e| ParseError::UnexpectedError(e.into()))?;
 
-            let mut daughter = vec![];
-            if row.d1.is_some() {
-                daughter.push(Daughter {
-                    branch_rate: row.d1_branch.unwrap(),
-                    nuclide: row.d1.unwrap(),
-                })
-            };
-            if row.d2.is_some() {
-                daughter.push(Daughter {
-                    branch_rate: row.d2_branch.unwrap(),
-                    nuclide: row.d2.unwrap(),
-                })
-            };
-            if row.d3.is_some() {
-                daughter.push(Daughter {
-                    branch_rate: row.d3_branch.unwrap(),
-                    nuclide: row.d3.unwrap(),
-                })
-            };
-            if row.d4.is_some() {
-                daughter.push(Daughter {
-                    branch_rate: row.d4_branch.unwrap(),
-                    nuclide: row.d4.unwrap(),
-                })
-            };
+            let mut progeny = vec![];
+
+            macro_rules! append_progeny {
+                ($d:ident, $br:ident) => {
+                    if row.$d.is_some() {
+                        progeny.push(Progeny {
+                            branch_rate: row.$br.unwrap(),
+                            nuclide: row.$d.unwrap(),
+                        })
+                    }
+                };
+            }
+
+            append_progeny!(d1, d1_branch);
+            append_progeny!(d2, d2_branch);
+            append_progeny!(d3, d3_branch);
+            append_progeny!(d4, d4_branch);
 
             inner.insert(
                 row.nuclide,
                 Attribute {
                     half_life: row.half_life,
                     decay_mode: row.decay_mode,
-                    daughter,
+                    progeny,
                     alpha_energy: row.alpha_energy,
                     electron_energy: row.electron_energy,
                     photon_energy: row.photon_energy,
@@ -168,41 +137,23 @@ impl NuclideData {
             );
         }
 
-        let mut rad: NuclideSpectrum<rad::Spectrum> =
-            NuclideSpectrum::new::<_, rad::Entry>(path.as_ref().join("ICRP-07.RAD"))?;
-        for (nuclide, spectrum) in rad.0.drain() {
-            if let Some(attr) = inner.get_mut(&nuclide) {
-                attr.spectrum
-                    .extend(spectrum.into_iter().map(|s| Spectrum::Radiation(s)))
+        macro_rules! read_spectrum {
+            ($mod:ident, $type:ident, $file:expr, $range:expr) => {
+                let mut spectrum_file: NuclideSpectrum<$mod::Spectrum> =
+                    NuclideSpectrum::new(path.as_ref().join($file), $range)?;
+                for (nuclide, spectrum) in spectrum_file.0.drain() {
+                    if let Some(attr) = inner.get_mut(&nuclide) {
+                        attr.spectrum
+                            .extend(spectrum.into_iter().map(Spectrum::$type))
+                    };
+                }
             };
         }
 
-        let mut bet: NuclideSpectrum<bet::Spectrum> =
-            NuclideSpectrum::new::<_, bet::Entry>(path.as_ref().join("ICRP-07.BET"))?;
-        for (nuclide, spectrum) in bet.0.drain() {
-            if let Some(attr) = inner.get_mut(&nuclide) {
-                attr.spectrum
-                    .extend(spectrum.into_iter().map(|s| Spectrum::Beta(s)))
-            };
-        }
-
-        let mut ack: NuclideSpectrum<ack::Spectrum> =
-            NuclideSpectrum::new::<_, ack::Entry>(path.as_ref().join("ICRP-07.ACK"))?;
-        for (nuclide, spectrum) in ack.0.drain() {
-            if let Some(attr) = inner.get_mut(&nuclide) {
-                attr.spectrum
-                    .extend(spectrum.into_iter().map(|s| Spectrum::AugerCkElectron(s)))
-            };
-        }
-
-        let mut nsf: NuclideSpectrum<nsf::Spectrum> =
-            NuclideSpectrum::new::<_, nsf::Entry>(path.as_ref().join("ICRP-07.NSF"))?;
-        for (nuclide, spectrum) in nsf.0.drain() {
-            if let Some(attr) = inner.get_mut(&nuclide) {
-                attr.spectrum
-                    .extend(spectrum.into_iter().map(|s| Spectrum::Neutron(s)))
-            };
-        }
+        read_spectrum!(rad, Radiation, "ICRP-07.RAD", 20..29);
+        read_spectrum!(bet, Beta, "ICRP-07.BET", 7..17);
+        read_spectrum!(ack, AugerCKElectron, "ICRP-07.ACK", 24..32);
+        read_spectrum!(nsf, Neutron, "ICRP-07.NSF", 20..29);
 
         Ok(Self(inner))
     }

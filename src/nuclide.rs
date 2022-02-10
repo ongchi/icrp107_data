@@ -24,7 +24,7 @@ serde_plain::derive_display_from_serialize!(MetastableState);
 #[derive(Hash, PartialEq, Eq, Clone)]
 pub struct Nuclide {
     symbol: String,
-    mass_number: u16,
+    mass_number: u64,
     meta: MetastableState,
 }
 
@@ -119,9 +119,9 @@ bitflags! {
     pub struct DecayMode: u8 {
         const ALPHA = 0x01;
         const BETA_MINUS = 0x02;
-        const BETA_PLUS = 0x04;
+        const BETA_PLUS_OR_EC = 0x04;
         const ELECTRON_CAPTURE = 0x08;
-        const INTERNAL_TRANSITION = 0x10;
+        const ISOMETRIC_TRANSITION = 0x10;
         const SPONTANEOUS_FISSION = 0x20;
     }
 }
@@ -130,7 +130,7 @@ impl std::str::FromStr for DecayMode {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = regex!(r"A|B\-|B\+|EC|IT|SF");
+        let re = regex!(r"A|B\-|ECB\+|EC|IT|SF");
 
         let mut dm: DecayMode = DecayMode::empty();
         for captures in re.captures_iter(s) {
@@ -138,9 +138,9 @@ impl std::str::FromStr for DecayMode {
                 match capture.unwrap().as_str() {
                     "A" => dm |= DecayMode::ALPHA,
                     "B-" => dm |= DecayMode::BETA_MINUS,
-                    "B+" => dm |= DecayMode::BETA_PLUS,
+                    "ECB+" => dm |= DecayMode::BETA_PLUS_OR_EC,
                     "EC" => dm |= DecayMode::ELECTRON_CAPTURE,
-                    "IT" => dm |= DecayMode::INTERNAL_TRANSITION,
+                    "IT" => dm |= DecayMode::ISOMETRIC_TRANSITION,
                     "SF" => dm |= DecayMode::SPONTANEOUS_FISSION,
                     dm => return Err(ParseError::InvalidDecayMode(dm.to_string())),
                 }

@@ -1,80 +1,52 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::str::FromStr;
 
-use super::nuclide::Nuclide;
+use crate::FromRow;
+
 use super::ParseError;
 
-pub struct Entry {
-    pub nuclide: Nuclide,
-    // half_life: HalfLife,
-    pub records: u64,
-}
-
-impl FromStr for Entry {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            nuclide: s[0..7].parse::<Nuclide>()?,
-            records: s[20..29]
-                .trim()
-                .parse::<u64>()
-                .map_err(|_| ParseError::InvalidInteger(s[20..29].trim().to_string()))?,
-        })
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 pub enum RadiationType {
-    G,
-    PG,
-    DG,
+    #[serde(rename = "G")]
+    Gamma,
+    #[serde(rename = "PG")]
+    PromptGamma,
+    #[serde(rename = "DG")]
+    DelayedGamma,
     X,
-    AQ,
+    #[serde(rename = "AQ")]
+    AnnihilationPhoton,
     #[serde(rename = "B+")]
-    BPlus,
+    BetaPlus,
     #[serde(rename = "B-")]
-    BMinus,
-    BD,
-    IE,
-    AE,
-    A,
-    AR,
-    FF,
-    N,
-    // ??
-    DB,
+    BetaMinus,
+    #[serde(rename = "DB")]
+    DelayedBeta,
+    #[serde(rename = "IE")]
+    InternalConversionElectron,
+    #[serde(rename = "AE")]
+    AugerElectron,
+    #[serde(rename = "A")]
+    Alpha,
+    #[serde(rename = "AR")]
+    AlphaRecoil,
+    #[serde(rename = "FF")]
+    FissionFragment,
+    #[serde(rename = "N")]
+    Neutron,
 }
 
 serde_plain::derive_fromstr_from_deserialize!(RadiationType);
 
-impl RadiationType {
-    fn code(&self) -> u8 {
-        match self {
-            Self::G => 1,
-            Self::PG => 1,
-            Self::DG => 1,
-            Self::X => 2,
-            Self::AQ => 3,
-            Self::BPlus => 4,
-            Self::BMinus => 5,
-            Self::BD => 5,
-            Self::IE => 6,
-            Self::AE => 7,
-            Self::A => 8,
-            Self::AR => 9,
-            Self::FF => 10,
-            Self::N => 11,
-            Self::DB => 0,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Spectrum {
+    code: u64,
+
     r#type: RadiationType,
+
     // yield of radiation (/nt)
     r#yield: f64,
+
     // energy of reaidation (MeV)
     energy: f64,
 }
@@ -84,35 +56,10 @@ impl FromStr for Spectrum {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self {
-            r#type: s[26..29]
-                .trim()
-                .parse()
-                .map_err(|_| ParseError::InvalidRadiationType(s[26..29].trim().to_string()))?,
-            r#yield: s[2..14]
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| ParseError::InvalidFloat(s[2..14].trim().to_string()))?,
-            energy: s[14..26]
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| ParseError::InvalidFloat(s[14..26].trim().to_string()))?,
+            code: s.from_row(0..2)?,
+            r#type: s.from_row(26..29)?,
+            r#yield: s.from_row(2..14)?,
+            energy: s.from_row(14..26)?,
         })
-    }
-}
-
-serde_plain::derive_deserialize_from_fromstr!(Spectrum, "invalid emitted radiation");
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn radiation_type() {
-        assert_eq!("G".parse::<RadiationType>().unwrap(), RadiationType::G);
-        assert_eq!("B+".parse::<RadiationType>().unwrap(), RadiationType::BPlus);
-        assert_eq!(
-            "B-".parse::<RadiationType>().unwrap(),
-            RadiationType::BMinus
-        );
     }
 }

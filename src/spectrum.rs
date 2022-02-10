@@ -5,55 +5,13 @@ use std::str::FromStr;
 use super::nuclide::Nuclide;
 use super::{ack, bet, nsf, rad, FileReader, ParseError};
 
-pub struct SpectrumEntry {
-    pub nuclide: Nuclide,
-    pub records: u64,
-}
-
-impl From<rad::Entry> for SpectrumEntry {
-    fn from(entry: rad::Entry) -> Self {
-        Self {
-            nuclide: entry.nuclide,
-            records: entry.records,
-        }
-    }
-}
-
-impl From<bet::Entry> for SpectrumEntry {
-    fn from(entry: bet::Entry) -> Self {
-        Self {
-            nuclide: entry.nuclide,
-            records: entry.records,
-        }
-    }
-}
-
-impl From<ack::Entry> for SpectrumEntry {
-    fn from(entry: ack::Entry) -> Self {
-        Self {
-            nuclide: entry.nuclide,
-            records: entry.records,
-        }
-    }
-}
-
-impl From<nsf::Entry> for SpectrumEntry {
-    fn from(entry: nsf::Entry) -> Self {
-        Self {
-            nuclide: entry.nuclide,
-            records: entry.records,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct NuclideSpectrum<T>(pub HashMap<Nuclide, Vec<T>>);
 
-impl<T: FromStr> NuclideSpectrum<T> {
-    pub fn new<P, R>(path: P) -> Result<Self, ParseError>
+impl<T> NuclideSpectrum<T> {
+    pub fn new<P>(path: P, range: std::ops::Range<usize>) -> Result<Self, ParseError>
     where
         P: AsRef<Path>,
-        R: FromStr<Err = ParseError> + Into<SpectrumEntry>,
         T: FromStr<Err = ParseError>,
     {
         let mut reader = FileReader::new(path.as_ref());
@@ -61,14 +19,20 @@ impl<T: FromStr> NuclideSpectrum<T> {
 
         let mut buf = String::new();
         while reader.read_buf(&mut buf)? != 0 {
-            let record: SpectrumEntry = buf.parse::<R>()?.into();
+            let nuclide = &buf[0..7];
+            let nuclide = nuclide.parse()?;
+            let records = &buf[range.clone()];
+            let records = records
+                .trim_matches(|c: char| c.is_whitespace() || c == '\0')
+                .parse::<u64>()
+                .map_err(|_| ParseError::InvalidInteger(records.trim().to_string()))?;
 
             let mut spectrum = vec![];
-            for _ in 0..(record.records) {
+            for _ in 0..(records) {
                 reader.read_buf(&mut buf)?;
                 spectrum.push(buf.parse()?);
             }
-            inner.insert(record.nuclide, spectrum);
+            inner.insert(nuclide, spectrum);
         }
 
         Ok(Self(inner))
@@ -79,6 +43,6 @@ impl<T: FromStr> NuclideSpectrum<T> {
 pub enum Spectrum {
     Radiation(rad::Spectrum),
     Beta(bet::Spectrum),
-    AugerCkElectron(ack::Spectrum),
+    AugerCKElectron(ack::Spectrum),
     Neutron(nsf::Spectrum),
 }

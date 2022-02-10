@@ -1,28 +1,8 @@
 use std::str::FromStr;
 
-use super::nuclide::Nuclide;
+use crate::FromRow;
+
 use super::ParseError;
-
-pub struct Entry {
-    pub nuclide: Nuclide,
-    pub records: u64,
-}
-
-impl FromStr for Entry {
-    type Err = ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            nuclide: s[0..7].parse()?,
-            records: s[7..17]
-                .trim()
-                .parse()
-                .map_err(|_| ParseError::InvalidInteger(s[7..17].trim().to_string()))?,
-        })
-    }
-}
-
-serde_plain::derive_deserialize_from_fromstr!(Entry, "invalid beta entry");
 
 #[derive(Debug)]
 pub struct Spectrum {
@@ -36,16 +16,9 @@ impl FromStr for Spectrum {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let energy = s[0..7]
-            .trim()
-            .parse()
-            .map_err(|_| ParseError::InvalidFloat(s[0..7].trim().to_string()))?;
-        let number = s[7..17]
-            .trim()
-            .parse()
-            .map_err(|_| ParseError::InvalidFloat(s[7..17].trim().to_string()))?;
-        Ok(Self { energy, number })
+        Ok(Self {
+            energy: s.from_row(0..7)?,
+            number: s.from_row(7..17)?,
+        })
     }
 }
-
-serde_plain::derive_deserialize_from_fromstr!(Spectrum, "invalid emitted beta");
