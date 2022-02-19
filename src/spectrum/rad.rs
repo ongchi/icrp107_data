@@ -2,40 +2,9 @@ use fixed_width_derive::FixedWidth;
 use serde::Deserialize;
 use std::str::FromStr;
 
-use super::Spectrum;
+use super::{RadiationType, Spectrum};
 use crate::derive_from_str_from_fixed_width;
 use crate::error::Error;
-
-#[derive(Debug, Deserialize, PartialEq, Eq)]
-pub enum RadiationType {
-    #[serde(rename = "G")]
-    Gamma,
-    #[serde(rename = "PG")]
-    PromptGamma,
-    #[serde(rename = "DG")]
-    DelayedGamma,
-    X,
-    #[serde(rename = "AQ")]
-    AnnihilationPhoton,
-    #[serde(rename = "B+")]
-    BetaPlus,
-    #[serde(rename = "B-")]
-    BetaMinus,
-    #[serde(rename = "DB")]
-    DelayedBeta,
-    #[serde(rename = "IE")]
-    InternalConversionElectron,
-    #[serde(rename = "AE")]
-    AugerElectron,
-    #[serde(rename = "A")]
-    Alpha,
-    #[serde(rename = "AR")]
-    AlphaRecoil,
-    #[serde(rename = "FF")]
-    FissionFragment,
-    #[serde(rename = "N")]
-    NeutronEmission,
-}
 
 #[derive(Debug, FixedWidth, Deserialize)]
 pub struct RadSpectrum {

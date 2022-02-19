@@ -33,7 +33,7 @@ pub enum MetastableState {
 serde_plain::derive_fromstr_from_deserialize!(MetastableState);
 serde_plain::derive_display_from_serialize!(MetastableState);
 
-#[derive(Debug, Hash, Clone, PartialEq, Eq, DeserializeFromStr)]
+#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
 pub struct Nuclide {
     pub symbol: Symbol,
     pub mass_number: Option<u64>,

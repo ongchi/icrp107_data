@@ -1,17 +1,12 @@
 use fixed_width::{Field, FixedWidth};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::Path;
 
-use super::nuclide::{half_life::HalfLife, DecayMode, Nuclide, Symbol};
-use super::spectrum::{NuclideSpectrum, Spectrum};
 use crate::derive_fixed_width_from_fortran_format;
 use crate::error::Error;
-use crate::reader::{fields_from_fortran_format, FileReader};
-use crate::spectrum::{ack, bet, nsf, rad};
+use crate::{DecayMode, HalfLife, Nuclide, Symbol};
 
 #[derive(Debug, Deserialize)]
-struct NdxEntry {
+pub(crate) struct NdxEntry {
     pub nuclide: Nuclide,
     pub half_life: HalfLife,
     pub decay_mode: DecayMode,
@@ -66,95 +61,50 @@ pub struct Attribute {
     pub air_kerma_coef: f64,
 }
 
-#[derive(Debug)]
-pub struct NuclideData {
-    pub attribute: HashMap<Nuclide, Attribute>,
-    pub spectrum: HashMap<Nuclide, Vec<Spectrum>>,
-}
+impl From<NdxEntry> for Attribute {
+    fn from(entry: NdxEntry) -> Attribute {
+        let mut progeny = vec![];
 
-impl NuclideData {
-    pub fn open<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let mut ndx = FileReader::new(&path.as_ref().join("ICRP-07.NDX")).skip_lines(1);
-        let mut attribute = HashMap::new();
-        let mut spectrum: HashMap<Nuclide, Vec<Spectrum>> = HashMap::new();
+        macro_rules! append_progeny {
+            ($d:ident, $br:ident) => {
+                if entry.$d.is_some() {
+                    let d_nuc = entry.$d.unwrap();
+                    let mode = check_decay_mode(&entry.nuclide, &d_nuc, entry.decay_mode).unwrap();
 
-        let mut buf = String::new();
-        while ndx.read_str(&mut buf)? != 0 {
-            let row: NdxEntry =
-                fixed_width::from_str(&buf).map_err(|e| Error::Unexpected(e.into()))?;
-
-            let nuc = row.nuclide;
-            let decay_mode = row.decay_mode;
-
-            let mut progeny = vec![];
-
-            macro_rules! append_progeny {
-                ($d:ident, $br:ident) => {
-                    if row.$d.is_some() {
-                        let d_nuc = row.$d.unwrap();
-                        let mode = match_decay_mode(&nuc, &d_nuc, decay_mode)?;
-
-                        progeny.push(Progeny {
-                            mode,
-                            branch_rate: row.$br.unwrap(),
-                            nuclide: d_nuc,
-                        })
-                    }
-                };
-            }
-
-            append_progeny!(d1, d1_branch);
-            append_progeny!(d2, d2_branch);
-            append_progeny!(d3, d3_branch);
-            append_progeny!(d4, d4_branch);
-
-            attribute.insert(
-                nuc,
-                Attribute {
-                    half_life: row.half_life,
-                    decay_mode,
-                    progeny,
-                    alpha_energy: row.alpha_energy,
-                    electron_energy: row.electron_energy,
-                    photon_energy: row.photon_energy,
-                    n_photon_le_10kev_per_nt: row.n_photon_le_10kev_per_nt,
-                    n_photon_gt_10kev_per_nt: row.n_photon_gt_10kev_per_nt,
-                    n_beta_per_nt: row.n_beta_per_nt,
-                    n_mono_electron_per_nt: row.n_mono_electron_per_nt,
-                    n_alpha_per_nt: row.n_alpha_per_nt,
-                    amu: row.amu,
-                    air_kerma_const: row.air_kerma_const,
-                    air_kerma_coef: row.air_kerma_coef,
-                },
-            );
-        }
-
-        macro_rules! read_spectrum {
-            ($mod:ident, $type:ident, $file:expr, $range:expr) => {
-                let mut spectrum_file: NuclideSpectrum<$mod::$type> =
-                    NuclideSpectrum::new(path.as_ref().join($file), $range)?;
-                for (n, s) in spectrum_file.0.drain() {
-                    spectrum.insert(n, s.into_iter().map(std::convert::Into::into).collect());
+                    progeny.push(Progeny {
+                        mode,
+                        branch_rate: entry.$br.unwrap(),
+                        nuclide: d_nuc,
+                    })
                 }
             };
         }
 
-        read_spectrum!(rad, RadSpectrum, "ICRP-07.RAD", 20..29);
-        read_spectrum!(bet, BetSpectrum, "ICRP-07.BET", 7..17);
-        read_spectrum!(ack, AckSpectrum, "ICRP-07.ACK", 24..32);
-        read_spectrum!(nsf, NsfSpectrum, "ICRP-07.NSF", 20..29);
+        append_progeny!(d1, d1_branch);
+        append_progeny!(d2, d2_branch);
+        append_progeny!(d3, d3_branch);
+        append_progeny!(d4, d4_branch);
 
-        Ok(Self {
-            attribute,
-            spectrum,
-        })
+        Attribute {
+            half_life: entry.half_life,
+            decay_mode: entry.decay_mode,
+            progeny,
+            alpha_energy: entry.alpha_energy,
+            electron_energy: entry.electron_energy,
+            photon_energy: entry.photon_energy,
+            n_photon_le_10kev_per_nt: entry.n_photon_le_10kev_per_nt,
+            n_photon_gt_10kev_per_nt: entry.n_photon_gt_10kev_per_nt,
+            n_beta_per_nt: entry.n_beta_per_nt,
+            n_mono_electron_per_nt: entry.n_mono_electron_per_nt,
+            n_alpha_per_nt: entry.n_alpha_per_nt,
+            amu: entry.amu,
+            air_kerma_const: entry.air_kerma_const,
+            air_kerma_coef: entry.air_kerma_coef,
+        }
     }
 }
 
-fn match_decay_mode(
+pub(crate) fn check_decay_mode(
     parent: &Nuclide,
     daughter: &Nuclide,
     decay_mode: DecayMode,

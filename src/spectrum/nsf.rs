@@ -8,10 +8,15 @@ use crate::error::Error;
 
 #[derive(Debug, FixedWidth, Deserialize)]
 pub struct NsfSpectrum {
+    // lower energy (MeV)
     #[fixed_width(range = "0..8")]
     energy_lower: f64,
+
+    // upper energy (MeV)
     #[fixed_width(range = "8..17")]
     energy_upper: f64,
+
+    // yield (/nt)
     #[fixed_width(range = "17..29")]
     r#yield: f64,
 }

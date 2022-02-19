@@ -27,7 +27,11 @@ macro_rules! derive_fixed_width_from_fortran_format {
                 static FIELDS: once_cell::sync::OnceCell<Vec<Field>> =
                     once_cell::sync::OnceCell::new();
                 FIELDS
-                    .get_or_init(|| fields_from_fortran_format($fortran).unwrap().1)
+                    .get_or_init(|| {
+                        crate::reader::fields_from_fortran_format($fortran)
+                            .unwrap()
+                            .1
+                    })
                     .to_vec()
             }
         }

@@ -3,60 +3,48 @@ pub(crate) mod bet;
 pub(crate) mod nsf;
 pub(crate) mod rad;
 
-use std::collections::HashMap;
-use std::path::Path;
-use std::str::FromStr;
+use serde::Deserialize;
 
-use super::nuclide::Nuclide;
-use crate::error::Error;
-use crate::reader::FileReader;
-use rad::*;
-
-#[derive(Debug)]
-pub struct NuclideSpectrum<T>(pub HashMap<Nuclide, Vec<T>>);
-
-impl<T> NuclideSpectrum<T> {
-    pub fn new<P>(path: P, range: std::ops::Range<usize>) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-        T: FromStr<Err = Error>,
-    {
-        let mut reader = FileReader::new(path.as_ref());
-        let mut inner = HashMap::new();
-
-        let mut buf = String::new();
-        while reader.read_str(&mut buf)? != 0 {
-            let nuclide = (&buf[0..7]).parse()?;
-            let records = &buf[range.clone()].replace("\0", " ");
-            let records = records
-                .trim()
-                .parse::<u64>()
-                .map_err(|_| Error::InvalidInteger(records.trim().to_string()))?;
-
-            let mut spectrum = vec![];
-            for _ in 0..(records) {
-                reader.read_str(&mut buf)?;
-                spectrum.push(buf.parse()?);
-            }
-            inner.insert(nuclide, spectrum);
-        }
-
-        Ok(Self(inner))
-    }
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+pub enum RadiationType {
+    #[serde(rename = "G")]
+    Gamma,
+    #[serde(rename = "PG")]
+    PromptGamma,
+    #[serde(rename = "DG")]
+    DelayedGamma,
+    X,
+    #[serde(rename = "AQ")]
+    AnnihilationPhoton,
+    #[serde(rename = "B+")]
+    BetaPlus,
+    #[serde(rename = "B-")]
+    BetaMinus,
+    #[serde(rename = "DB")]
+    DelayedBeta,
+    #[serde(rename = "IE")]
+    InternalConversionElectron,
+    #[serde(rename = "AE")]
+    AugerElectron,
+    #[serde(rename = "A")]
+    Alpha,
+    #[serde(rename = "AR")]
+    AlphaRecoil,
+    #[serde(rename = "FF")]
+    FissionFragment,
+    #[serde(rename = "N")]
+    NeutronEmission,
 }
 
 #[derive(Debug)]
 pub enum Spectrum {
     Radiation {
         r#type: RadiationType,
-        // /nt
         r#yield: f64,
-        // MeV
         energy: f64,
     },
     Beta {
         energy: f64,
-        // number of beta particles per MeV per nuclear transformation
         number: f64,
     },
     AugerCosterKronigElectron {
