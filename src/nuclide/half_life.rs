@@ -4,7 +4,7 @@ use serde_with::DeserializeFromStr;
 use crate::error::Error;
 use crate::regex;
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum TimeUnit {
     #[serde(rename = "us")]
     MicroSecond,
@@ -56,7 +56,7 @@ impl TimeUnit {
     }
 }
 
-#[derive(Debug, DeserializeFromStr)]
+#[derive(Debug, Clone, Copy, DeserializeFromStr)]
 pub struct HalfLife {
     pub value: f64,
     pub unit: TimeUnit,

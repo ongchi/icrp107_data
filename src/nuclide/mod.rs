@@ -16,11 +16,17 @@ pub enum Symbol {
     Pr, Nd, Pm, Sm, Eu, Gd, Tb, Dy, Ho, Er, Tm, Yb, Lu, Hf, Ta, W, Re, Os, Ir,
     Pt, Au, Hg, Tl, Pb, Bi, Po, At, Rn, Fr, Ra, Ac, Th, Pa, U, Np, Pu, Am, Cm,
     Bk, Cf, Es, Fm, Md, No, Lr, Rf, Db, Sg, Bh, Hs, Mt, Ds, Rg, Cn, Nh, Fl, Mc,
-    Lv, Ts, Og,
+    Lv, Ts, Og, None,
 }
 
 serde_plain::derive_fromstr_from_deserialize!(Symbol);
 serde_plain::derive_display_from_serialize!(Symbol);
+
+impl Default for Symbol {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MetastableState {
@@ -33,7 +39,7 @@ pub enum MetastableState {
 serde_plain::derive_fromstr_from_deserialize!(MetastableState);
 serde_plain::derive_display_from_serialize!(MetastableState);
 
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
+#[derive(Debug, Default, Hash, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
 pub struct Nuclide {
     pub symbol: Symbol,
     pub mass_number: Option<u64>,
@@ -42,15 +48,20 @@ pub struct Nuclide {
 
 impl std::fmt::Display for Nuclide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = String::new();
-        s.push_str(&self.symbol.to_string());
-        if self.mass_number.is_some() {
-            s.push_str(&format!("-{}", &self.mass_number.unwrap()));
-            if self.meta.is_some() {
-                s.push_str(&format!("{}", &self.meta.unwrap()));
+        match self.symbol {
+            Symbol::None => write!(f, "(None)")?,
+            _ => {
+                write!(f, "{}", self.symbol)?;
+                if self.mass_number.is_some() {
+                    write!(f, "-{}", self.mass_number.unwrap())?;
+                    if self.meta.is_some() {
+                        write!(f, "{}", self.meta.unwrap())?;
+                    }
+                }
             }
         }
-        write!(f, "{}", s)
+
+        Ok(())
     }
 }
 
@@ -85,6 +96,13 @@ bitflags::bitflags! {
         const ELECTRON_CAPTURE = 0x08;
         const ISOMETRIC_TRANSITION = 0x10;
         const SPONTANEOUS_FISSION = 0x20;
+    }
+}
+
+impl std::fmt::Display for DecayMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // fixme
+        write!(f, "{:?}", self)
     }
 }
 

@@ -1,6 +1,8 @@
+use petgraph::Graph;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::decay_chain;
 use crate::error::Error;
 use crate::ndx::Attribute;
 use crate::reader::{IndexReader, SpectrumReader};
@@ -28,5 +30,17 @@ impl NuclideData {
             ack: SpectrumReader::new(&path.as_ref().join("ICRP-07.ACK")).read()?,
             nsf: SpectrumReader::new(&path.as_ref().join("ICRP-07.NSF")).read()?,
         })
+    }
+
+    pub fn get_decay_chain_graph(
+        &self,
+        nuclide: Nuclide,
+    ) -> Graph<decay_chain::Node, decay_chain::Edge> {
+        let mut graph = Graph::new();
+        let mut edges = Vec::new();
+        decay_chain::build_graph(self, &mut graph, &mut edges, nuclide);
+        graph.extend_with_edges(edges.iter());
+
+        graph
     }
 }

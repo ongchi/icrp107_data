@@ -1,4 +1,5 @@
 mod dataset;
+mod decay_chain;
 mod error;
 mod macros;
 mod ndx;
