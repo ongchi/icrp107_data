@@ -1,6 +1,7 @@
 pub mod half_life;
 
-use serde::{Deserialize, Serialize};
+use flagset::{flags, FlagSet};
+use serde::{de::Visitor, Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
 use std::hash::Hash;
 
@@ -87,48 +88,74 @@ impl std::str::FromStr for Nuclide {
     }
 }
 
-bitflags::bitflags! {
-    #[derive(DeserializeFromStr)]
-    pub struct DecayMode: u8 {
-        const ALPHA = 0x01;
-        const BETA_MINUS = 0x02;
-        const BETA_PLUS = 0x04;
-        const ELECTRON_CAPTURE = 0x08;
-        const ISOMETRIC_TRANSITION = 0x10;
-        const SPONTANEOUS_FISSION = 0x20;
+flags! {
+    #[derive(Deserialize)]
+    pub enum DecayMode: u8 {
+        #[serde(rename = "A")]
+        Alpha,
+        #[serde(rename = "B-")]
+        BetaMinus,
+        #[serde(rename = "B+")]
+        BetaPlus,
+        #[serde(rename = "EC")]
+        ElectronCapture,
+        #[serde(rename = "IT")]
+        IsometricTransition,
+        #[serde(rename = "SF")]
+        SpontaneousFission,
     }
 }
 
 impl std::fmt::Display for DecayMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // fixme
-        write!(f, "{:?}", self)
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Alpha => "⍺",
+                Self::BetaMinus => "β-",
+                Self::BetaPlus => "β+",
+                Self::ElectronCapture => "EC",
+                Self::IsometricTransition => "IT",
+                Self::SpontaneousFission => "SF",
+            }
+        )
     }
 }
 
-impl std::str::FromStr for DecayMode {
-    type Err = Error;
+pub(crate) fn de_decay_mode<'de, D>(deserializer: D) -> Result<FlagSet<DecayMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct DecayModeVisitor;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = regex!(r"A|B\-|B\+|EC|IT|SF");
+    impl<'de> Visitor<'de> for DecayModeVisitor {
+        type Value = FlagSet<DecayMode>;
 
-        let mut dm: DecayMode = DecayMode::empty();
-        for captures in re.captures_iter(s) {
-            for capture in captures.iter() {
-                match capture.unwrap().as_str() {
-                    "A" => dm |= DecayMode::ALPHA,
-                    "B-" => dm |= DecayMode::BETA_MINUS,
-                    "B+" => dm |= DecayMode::BETA_PLUS,
-                    "EC" => dm |= DecayMode::ELECTRON_CAPTURE,
-                    "IT" => dm |= DecayMode::ISOMETRIC_TRANSITION,
-                    "SF" => dm |= DecayMode::SPONTANEOUS_FISSION,
-                    dm => return Err(Error::InvalidDecayMode(dm.to_string())),
-                }
-            }
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("A|B-|B+|EC|IT|SF")
         }
 
-        Ok(dm)
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            let re = regex!(r"A|B\-|B\+|EC|IT|SF");
+
+            let mut dm = FlagSet::default();
+            for captures in re.captures_iter(v) {
+                for capture in captures.iter() {
+                    let mode: DecayMode = serde_plain::from_str(capture.unwrap().as_str())
+                        .map_err(serde::de::Error::custom)?;
+                    dm |= mode;
+                }
+            }
+
+            Ok(dm)
+        }
     }
+
+    deserializer.deserialize_str(DecayModeVisitor)
 }
 
 #[cfg(test)]
@@ -155,5 +182,16 @@ mod test {
 
         let tc99m: Nuclide = "Tc-99m".parse().unwrap();
         assert_eq!(&tc99m.to_string(), "Tc-99m");
+    }
+
+    #[test]
+    fn deserialize_decay_mode() {
+        let de = serde_plain::Deserializer::new("A ECB-");
+        let mode = de_decay_mode(de).unwrap();
+
+        assert_eq!(
+            mode,
+            DecayMode::Alpha | DecayMode::ElectronCapture | DecayMode::BetaMinus
+        );
     }
 }

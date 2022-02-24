@@ -1,6 +1,7 @@
 use petgraph::{graph::NodeIndex, Graph};
 
 use crate::{DecayMode, HalfLife, Nuclide, NuclideData};
+use flagset::FlagSet;
 
 #[derive(Default, Clone, Copy)]
 pub struct Node {
@@ -25,12 +26,20 @@ impl std::fmt::Display for Node {
 #[derive(Clone)]
 pub struct Edge {
     branch_rate: f64,
-    decay_mode: DecayMode,
+    decay_mode: FlagSet<DecayMode>,
 }
 
 impl std::fmt::Display for Edge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{}", self.branch_rate, self.decay_mode)
+        write!(f, "{}\n", self.branch_rate)?;
+        for (i, mode) in self.decay_mode.into_iter().enumerate() {
+            if i == 0 {
+                write!(f, "{}", mode)?;
+            } else {
+                write!(f, " or {}", mode)?;
+            }
+        }
+        write!(f, "")
     }
 }
 

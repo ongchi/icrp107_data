@@ -1,15 +1,18 @@
 use fixed_width::{Field, FixedWidth};
+use flagset::FlagSet;
 use serde::Deserialize;
 
 use crate::derive_fixed_width_from_fortran_format;
 use crate::error::Error;
+use crate::nuclide::de_decay_mode;
 use crate::{DecayMode, HalfLife, Nuclide, Symbol};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NdxEntry {
     pub nuclide: Nuclide,
     pub half_life: HalfLife,
-    pub decay_mode: DecayMode,
+    #[serde(deserialize_with = "de_decay_mode")]
+    pub decay_mode: FlagSet<DecayMode>,
     pub d1: Option<Nuclide>,
     pub d1_branch: Option<f64>,
     pub d2: Option<Nuclide>,
@@ -38,7 +41,7 @@ derive_fixed_width_from_fortran_format!(
 
 #[derive(Debug)]
 pub struct Progeny {
-    pub mode: DecayMode,
+    pub mode: FlagSet<DecayMode>,
     pub branch_rate: f64,
     pub nuclide: Nuclide,
 }
@@ -46,7 +49,7 @@ pub struct Progeny {
 #[derive(Debug)]
 pub struct Attribute {
     pub half_life: HalfLife,
-    pub decay_mode: DecayMode,
+    pub decay_mode: FlagSet<DecayMode>,
     pub progeny: Vec<Progeny>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
@@ -107,27 +110,27 @@ impl From<NdxEntry> for Attribute {
 pub(crate) fn check_decay_mode(
     parent: &Nuclide,
     daughter: &Nuclide,
-    decay_mode: DecayMode,
-) -> Result<DecayMode, Error> {
+    decay_mode: FlagSet<DecayMode>,
+) -> Result<FlagSet<DecayMode>, Error> {
     let z = parent.symbol as u64;
 
     let d_z = daughter.symbol as u64;
-    let mut mode = DecayMode::empty();
+    let mut mode = FlagSet::default();
 
     if daughter.symbol == Symbol::SF {
-        mode |= DecayMode::SPONTANEOUS_FISSION & decay_mode;
+        mode |= DecayMode::SpontaneousFission & decay_mode;
     } else {
         let a = parent.mass_number.unwrap();
         let d_a = daughter.mass_number.unwrap();
 
         if z == d_z && a == d_a {
-            mode |= DecayMode::ISOMETRIC_TRANSITION & decay_mode;
+            mode |= DecayMode::IsometricTransition & decay_mode;
         } else if z == d_z + 2 && a == d_a + 4 {
-            mode |= DecayMode::ALPHA & decay_mode;
+            mode |= DecayMode::Alpha & decay_mode;
         } else if z + 1 == d_z && a == d_a {
-            mode |= DecayMode::BETA_MINUS & decay_mode;
+            mode |= DecayMode::BetaMinus & decay_mode;
         } else if z == d_z + 1 && a == d_a {
-            mode |= (DecayMode::BETA_PLUS | DecayMode::ELECTRON_CAPTURE) & decay_mode;
+            mode |= (DecayMode::BetaPlus | DecayMode::ElectronCapture) & decay_mode;
         }
     }
 
