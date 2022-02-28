@@ -107,7 +107,7 @@ impl From<NdxEntry> for Attribute {
     }
 }
 
-pub(crate) fn check_decay_mode(
+fn check_decay_mode(
     parent: &Nuclide,
     daughter: &Nuclide,
     decay_mode: FlagSet<DecayMode>,

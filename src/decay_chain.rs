@@ -1,6 +1,7 @@
 use petgraph::{graph::NodeIndex, Graph};
+use std::collections::HashMap;
 
-use crate::{DecayMode, HalfLife, Nuclide, NuclideData};
+use crate::{error::Error, ndx::Attribute, DecayMode, HalfLife, Nuclide};
 use flagset::FlagSet;
 
 #[derive(Default, Clone, Copy)]
@@ -31,7 +32,7 @@ pub struct Edge {
 
 impl std::fmt::Display for Edge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n", self.branch_rate)?;
+        writeln!(f, "{}", self.branch_rate)?;
         for (i, mode) in self.decay_mode.into_iter().enumerate() {
             if i == 0 {
                 write!(f, "{}", mode)?;
@@ -44,11 +45,11 @@ impl std::fmt::Display for Edge {
 }
 
 pub(crate) fn build_graph(
-    data: &NuclideData,
+    ndx: &HashMap<Nuclide, Attribute>,
     graph: &mut Graph<Node, Edge>,
     edges: &mut Vec<(NodeIndex, NodeIndex, Edge)>,
     nuclide: Nuclide,
-) {
+) -> Result<(), Error> {
     macro_rules! get_or_add_node_index {
         ($nuc:expr) => {{
             match graph
@@ -59,10 +60,7 @@ pub(crate) fn build_graph(
                 Some(i) => NodeIndex::new(i),
                 None => graph.add_node(Node {
                     nuclide: $nuc,
-                    half_life: match data.ndx.get(&$nuc) {
-                        Some(attr) => Some(attr.half_life),
-                        None => None,
-                    },
+                    half_life: ndx.get(&$nuc).map(|attr| attr.half_life),
                 }),
             }
         }};
@@ -70,28 +68,24 @@ pub(crate) fn build_graph(
 
     let parent = get_or_add_node_index!(nuclide);
 
-    match &data.ndx.get(&nuclide) {
-        Some(attr) => {
-            for d in attr.progeny.iter() {
-                let progeny = get_or_add_node_index!(d.nuclide);
+    if let Some(attr) = ndx.get(&nuclide) {
+        for d in attr.progeny.iter() {
+            let progeny = get_or_add_node_index!(d.nuclide);
 
-                if edges
-                    .iter()
-                    .position(|(p, d, _)| {
-                        p.index() == parent.index() && d.index() == progeny.index()
-                    })
-                    .is_none()
-                {
-                    let attr = Edge {
-                        branch_rate: d.branch_rate,
-                        decay_mode: d.mode,
-                    };
-                    edges.push((parent, progeny, attr));
-                }
-
-                build_graph(data, graph, edges, d.nuclide);
+            if !edges
+                .iter()
+                .any(|(p, d, _)| p.index() == parent.index() && d.index() == progeny.index())
+            {
+                let attr = Edge {
+                    branch_rate: d.branch_rate,
+                    decay_mode: d.mode,
+                };
+                edges.push((parent, progeny, attr));
             }
+
+            let _ = build_graph(ndx, graph, edges, d.nuclide);
         }
-        None => {}
     }
+
+    Ok(())
 }

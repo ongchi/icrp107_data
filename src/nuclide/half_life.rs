@@ -87,7 +87,7 @@ impl std::str::FromStr for HalfLife {
 
 impl std::fmt::Display for HalfLife {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.value, self.unit.to_string())
+        write!(f, "{}{}", self.value, self.unit)
     }
 }
 
