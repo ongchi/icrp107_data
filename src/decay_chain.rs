@@ -1,7 +1,8 @@
-use petgraph::{graph::NodeIndex, Graph};
-use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::{error::Error, ndx::Attribute, DecayMode, HalfLife, Nuclide};
+use petgraph::{graph::NodeIndex, Graph};
+
+use crate::nuclide::{DecayMode, HalfLife, Nuclide, Progeny};
 use flagset::FlagSet;
 
 #[derive(Default, Clone, Copy)]
@@ -44,48 +45,58 @@ impl std::fmt::Display for Edge {
     }
 }
 
-pub(crate) fn build_graph(
-    ndx: &HashMap<Nuclide, Attribute>,
-    graph: &mut Graph<Node, Edge>,
-    edges: &mut Vec<(NodeIndex, NodeIndex, Edge)>,
-    nuclide: Nuclide,
-) -> Result<(), Error> {
-    macro_rules! get_or_add_node_index {
-        ($nuc:expr) => {{
+pub trait DecayChain {
+    fn get_progeny(&self, nuclide: &Nuclide) -> Option<Vec<Progeny>>;
+
+    fn get_half_life(&self, nuclide: &Nuclide) -> Option<HalfLife>;
+
+    fn build_graph<N: Into<Nuclide>>(&self, parent: N) -> Graph<Node, Edge> {
+        let mut graph = Graph::new();
+        let mut edges = vec![];
+
+        let mut get_or_insert_node = |nuclide: Nuclide| -> NodeIndex {
             match graph
                 .raw_nodes()
                 .iter()
-                .position(|n| n.weight.nuclide == $nuc)
+                .position(|n: &petgraph::graph::Node<Node>| n.weight.nuclide == nuclide)
             {
                 Some(i) => NodeIndex::new(i),
-                None => graph.add_node(Node {
-                    nuclide: $nuc,
-                    half_life: ndx.get(&$nuc).map(|attr| attr.half_life),
-                }),
+                None => {
+                    let half_life = self.get_half_life(&nuclide);
+                    graph.add_node(Node { nuclide, half_life })
+                }
             }
-        }};
-    }
+        };
 
-    let parent = get_or_add_node_index!(nuclide);
+        let mut stack = vec![parent.into()];
+        let mut visited: HashSet<usize> = HashSet::new();
+        while !stack.is_empty() {
+            let p = stack.pop().unwrap();
+            let p_node = get_or_insert_node(p);
 
-    if let Some(attr) = ndx.get(&nuclide) {
-        for d in attr.progeny.iter() {
-            let progeny = get_or_add_node_index!(d.nuclide);
-
-            if !edges
-                .iter()
-                .any(|(p, d, _)| p.index() == parent.index() && d.index() == progeny.index())
-            {
-                let attr = Edge {
-                    branch_rate: d.branch_rate,
-                    decay_mode: d.mode,
-                };
-                edges.push((parent, progeny, attr));
+            if visited.contains(&p_node.index()) {
+                continue;
+            } else {
+                visited.insert(p_node.index());
             }
 
-            let _ = build_graph(ndx, graph, edges, d.nuclide);
+            match self.get_progeny(&p) {
+                Some(progeny) => {
+                    for d in progeny {
+                        stack.push(d.nuclide);
+                        let d_node = get_or_insert_node(d.nuclide);
+                        let edge = Edge {
+                            branch_rate: d.branch_rate,
+                            decay_mode: d.decay_mode,
+                        };
+                        edges.push((p_node, d_node, edge));
+                    }
+                }
+                None => {}
+            }
         }
-    }
+        graph.extend_with_edges(edges);
 
-    Ok(())
+        graph
+    }
 }

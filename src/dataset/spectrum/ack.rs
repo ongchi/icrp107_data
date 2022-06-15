@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use super::Spectrum;
-use crate::derive_from_str_from_fixed_width;
+use crate::derive_from_str;
 use crate::error::Error;
 
 #[derive(Debug, FixedWidth, Deserialize)]
@@ -20,7 +20,7 @@ pub struct AckSpectrum {
     transition: String,
 }
 
-derive_from_str_from_fixed_width!(AckSpectrum);
+derive_from_str!(AckSpectrum);
 
 impl From<AckSpectrum> for Spectrum {
     fn from(ack: AckSpectrum) -> Self {

@@ -1,13 +1,12 @@
-use fixed_width::Field;
+use fixed_width::FieldSet;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::str::FromStr;
 
+use super::ndx::{Attribute, NdxEntry};
 use crate::error::Error;
-use crate::ndx::{Attribute, NdxEntry};
-use crate::regex;
 use crate::Nuclide;
 
 pub struct FileReader(BufReader<File>);
@@ -38,9 +37,9 @@ pub struct IndexReader {
 }
 
 impl IndexReader {
-    pub fn new(path: &Path) -> Self {
+    pub fn new<P: AsRef<Path>>(path: &P) -> Self {
         Self {
-            reader: FileReader::new(path).skip_lines(1),
+            reader: FileReader::new(path.as_ref()).skip_lines(1),
         }
     }
 
@@ -102,12 +101,15 @@ where
     }
 }
 
-pub(crate) fn fields_from_fortran_format(fmt: &str) -> Result<(usize, Vec<Field>), String> {
+pub(crate) fn fields_from_fortran_format(
+    fmt: &str,
+    offset: usize,
+) -> Result<(FieldSet, usize), String> {
     let re = regex!(
         r"(?P<repeat>\d*)(?:(?P<type>[a-z]{1,2})|(?P<nested>\([^\(\)]+?\)))(?:(?P<length>\d+)(?:\.\d+)?)?"
     );
     let mut start = 0;
-    let mut fields = vec![];
+    let mut fields = FieldSet::Seq(vec![]);
 
     let fmt: String = fmt
         .trim_matches(|c: char| c.is_whitespace() || c == '(' || c == ')')
@@ -120,24 +122,26 @@ pub(crate) fn fields_from_fortran_format(fmt: &str) -> Result<(usize, Vec<Field>
         Err("invalid fortran format".to_string())
     } else {
         for cap in captures.into_iter() {
-            let r: usize = cap
+            let rep: usize = cap
                 .name("repeat")
                 .map(|m| m.as_str().parse().unwrap_or(1))
                 .unwrap();
 
             match cap.name("type") {
                 Some(m) => {
-                    let t = m.as_str();
-                    let l: usize = cap
+                    let typ = m.as_str();
+                    let len: usize = cap
                         .name("length")
                         .map(|m| m.as_str().parse().unwrap())
                         .unwrap_or(1);
-                    match t {
-                        "x" => start += r * l,
+                    match typ {
+                        "x" => start += rep * len,
                         _ => {
-                            for _ in 0..r {
-                                fields.push(Field::default().range(start..start + l));
-                                start += l
+                            for _ in 0..rep {
+                                fields = fields.extend(FieldSet::new_field(
+                                    offset + start..offset + start + len,
+                                ));
+                                start += len
                             }
                         }
                     }
@@ -148,16 +152,14 @@ pub(crate) fn fields_from_fortran_format(fmt: &str) -> Result<(usize, Vec<Field>
                             return Err("invalid fortran format".to_string());
                         } else {
                             let fmt = m.as_str();
-                            let (l, nested_fields) = fields_from_fortran_format(fmt)?;
-                            for _ in 0..r {
-                                for field in nested_fields.iter() {
-                                    let mut field = field.clone();
-                                    field.range.start += start;
-                                    field.range.end += start;
-                                    fields.push(field)
-                                }
-                                start += l;
+                            let mut nested_fields = vec![];
+                            for _ in 0..rep {
+                                let (nested_field, len) =
+                                    fields_from_fortran_format(fmt, offset + start)?;
+                                nested_fields.push(nested_field);
+                                start += len;
                             }
+                            fields = fields.append(FieldSet::Seq(nested_fields))
                         }
                     }
                     None => return Err("invalid fortran format".to_string()),
@@ -165,6 +167,60 @@ pub(crate) fn fields_from_fortran_format(fmt: &str) -> Result<(usize, Vec<Field>
             }
         }
 
-        Ok((start, fields))
+        Ok((fields, start))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use fixed_width::{field, field_seq, FieldConfig};
+
+    use super::fields_from_fortran_format;
+
+    #[test]
+    fn test_fields_from_fortran_format() {
+        let fortran_format = "(a10,2i10,3f10.0,4e10.0)";
+        let (fields, len) = fields_from_fortran_format(fortran_format, 0).unwrap();
+        let fields = fields.flatten();
+
+        assert_eq!(len, 100);
+        for i in 0..10 {
+            assert_eq!(
+                format!("{:?}", fields[i]),
+                format!("{:?}", FieldConfig::new(i * 10..(i + 1) * 10))
+            );
+        }
+    }
+
+    #[test]
+    fn test_nested_fields_from_fortran_format() {
+        let fortran_format =
+            "(a7,a10,a8,28x,4(a7,6x,e11.0,1x),f7.0,2f8.0,3i4,i5,i4,e11.0,e10.0,e9.0)";
+        let (fields, _len) = fields_from_fortran_format(fortran_format, 0).unwrap();
+
+        let complex_fields = field_seq![
+            field!(0..7),
+            field!(7..17),
+            field!(17..25),
+            field_seq![
+                field_seq![field!(53..60), field!(66..77)],
+                field_seq![field!(78..85), field!(91..102)],
+                field_seq![field!(103..110), field!(116..127)],
+                field_seq![field!(128..135), field!(141..152)],
+            ],
+            field!(153..160),
+            field!(160..168),
+            field!(168..176),
+            field!(176..180),
+            field!(180..184),
+            field!(184..188),
+            field!(188..193),
+            field!(193..197),
+            field!(197..208),
+            field!(208..218),
+            field!(218..227),
+        ];
+
+        assert_eq!(format!("{:?}", fields), format!("{:?}", complex_fields));
     }
 }

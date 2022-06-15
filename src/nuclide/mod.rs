@@ -1,7 +1,11 @@
+pub mod decay_mode;
 pub mod half_life;
 
-use flagset::{flags, FlagSet};
-use serde::{de::Visitor, Deserialize, Serialize};
+pub use decay_mode::DecayMode;
+pub use half_life::HalfLife;
+
+use flagset::FlagSet;
+use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
 use std::hash::Hash;
 
@@ -88,74 +92,11 @@ impl std::str::FromStr for Nuclide {
     }
 }
 
-flags! {
-    #[derive(Deserialize)]
-    pub enum DecayMode: u8 {
-        #[serde(rename = "A")]
-        Alpha,
-        #[serde(rename = "B-")]
-        BetaMinus,
-        #[serde(rename = "B+")]
-        BetaPlus,
-        #[serde(rename = "EC")]
-        ElectronCapture,
-        #[serde(rename = "IT")]
-        IsometricTransition,
-        #[serde(rename = "SF")]
-        SpontaneousFission,
-    }
-}
-
-impl std::fmt::Display for DecayMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Alpha => "⍺",
-                Self::BetaMinus => "β-",
-                Self::BetaPlus => "β+",
-                Self::ElectronCapture => "EC",
-                Self::IsometricTransition => "IT",
-                Self::SpontaneousFission => "SF",
-            }
-        )
-    }
-}
-
-pub(crate) fn de_decay_mode<'de, D>(deserializer: D) -> Result<FlagSet<DecayMode>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    struct DecayModeVisitor;
-
-    impl<'de> Visitor<'de> for DecayModeVisitor {
-        type Value = FlagSet<DecayMode>;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("A|B-|B+|EC|IT|SF")
-        }
-
-        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            let re = regex!(r"A|B\-|B\+|EC|IT|SF");
-
-            let mut dm = FlagSet::default();
-            for captures in re.captures_iter(v) {
-                for capture in captures.iter() {
-                    let mode: DecayMode = serde_plain::from_str(capture.unwrap().as_str())
-                        .map_err(serde::de::Error::custom)?;
-                    dm |= mode;
-                }
-            }
-
-            Ok(dm)
-        }
-    }
-
-    deserializer.deserialize_str(DecayModeVisitor)
+#[derive(Debug, Clone)]
+pub struct Progeny {
+    pub decay_mode: FlagSet<decay_mode::DecayMode>,
+    pub branch_rate: f64,
+    pub nuclide: Nuclide,
 }
 
 #[cfg(test)]
@@ -182,16 +123,5 @@ mod test {
 
         let tc99m: Nuclide = "Tc-99m".parse().unwrap();
         assert_eq!(&tc99m.to_string(), "Tc-99m");
-    }
-
-    #[test]
-    fn deserialize_decay_mode() {
-        let de = serde_plain::Deserializer::new("A ECB-");
-        let mode = de_decay_mode(de).unwrap();
-
-        assert_eq!(
-            mode,
-            DecayMode::Alpha | DecayMode::ElectronCapture | DecayMode::BetaMinus
-        );
     }
 }

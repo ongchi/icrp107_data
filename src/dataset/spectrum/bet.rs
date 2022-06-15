@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use super::Spectrum;
-use crate::derive_from_str_from_fixed_width;
+use crate::derive_from_str;
 use crate::error::Error;
 
 // beta- emission data
@@ -18,7 +18,7 @@ pub struct BetSpectrum {
     number: f64,
 }
 
-derive_from_str_from_fixed_width!(BetSpectrum);
+derive_from_str!(BetSpectrum);
 
 impl From<BetSpectrum> for Spectrum {
     fn from(bet: BetSpectrum) -> Self {

@@ -1,26 +1,18 @@
-use fixed_width::{Field, FixedWidth};
+use fixed_width::{FieldSet, FixedWidth};
 use flagset::FlagSet;
 use serde::Deserialize;
 
-use crate::derive_fixed_width_from_fortran_format;
+use super::reader;
 use crate::error::Error;
-use crate::nuclide::de_decay_mode;
-use crate::{DecayMode, HalfLife, Nuclide, Symbol};
+use crate::nuclide::{decay_mode, DecayMode, HalfLife, Nuclide, Progeny, Symbol};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NdxEntry {
     pub nuclide: Nuclide,
     pub half_life: HalfLife,
-    #[serde(deserialize_with = "de_decay_mode")]
+    #[serde(with = "decay_mode")]
     pub decay_mode: FlagSet<DecayMode>,
-    pub d1: Option<Nuclide>,
-    pub d1_branch: Option<f64>,
-    pub d2: Option<Nuclide>,
-    pub d2_branch: Option<f64>,
-    pub d3: Option<Nuclide>,
-    pub d3_branch: Option<f64>,
-    pub d4: Option<Nuclide>,
-    pub d4_branch: Option<f64>,
+    pub progeny: Vec<Option<(Nuclide, f64)>>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
     pub photon_energy: f64,
@@ -34,19 +26,19 @@ pub(crate) struct NdxEntry {
     pub air_kerma_coef: f64,
 }
 
-derive_fixed_width_from_fortran_format!(
-    NdxEntry,
-    "(a7,a10,a8,27x,4(1x,a7,6x,e11.0),1x,f7.0,2f8.0,3i4,i5,i4,e11.0,e10.0,e9.0)"
-);
-
-#[derive(Debug)]
-pub struct Progeny {
-    pub mode: FlagSet<DecayMode>,
-    pub branch_rate: f64,
-    pub nuclide: Nuclide,
+impl FixedWidth for NdxEntry {
+    fn fields() -> FieldSet {
+        reader::fields_from_fortran_format(
+            "(a7,a10,a8,28x,4(a7,6x,e11.0,1x),f7.0,2f8.0,3i4,i5,i4,e11.0,e10.0,e9.0)",
+            0,
+        )
+        .unwrap()
+        .0
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+#[serde(from = "NdxEntry")]
 pub struct Attribute {
     pub half_life: HalfLife,
     pub decay_mode: FlagSet<DecayMode>,
@@ -64,29 +56,31 @@ pub struct Attribute {
     pub air_kerma_coef: f64,
 }
 
+impl FixedWidth for Attribute {
+    fn fields() -> fixed_width::FieldSet {
+        NdxEntry::fields()
+    }
+}
+
 impl From<NdxEntry> for Attribute {
     fn from(entry: NdxEntry) -> Attribute {
         let mut progeny = vec![];
 
-        macro_rules! append_progeny {
-            ($d:ident, $br:ident) => {
-                if entry.$d.is_some() {
-                    let d_nuc = entry.$d.unwrap();
-                    let mode = check_decay_mode(&entry.nuclide, &d_nuc, entry.decay_mode).unwrap();
+        for daughter in entry.progeny {
+            match daughter {
+                Some((nuclide, branch_rate)) => {
+                    let mode =
+                        check_decay_mode(&entry.nuclide, &nuclide, entry.decay_mode).unwrap();
 
                     progeny.push(Progeny {
-                        mode,
-                        branch_rate: entry.$br.unwrap(),
-                        nuclide: d_nuc,
+                        decay_mode: mode,
+                        branch_rate,
+                        nuclide,
                     })
                 }
-            };
+                None => {}
+            }
         }
-
-        append_progeny!(d1, d1_branch);
-        append_progeny!(d2, d2_branch);
-        append_progeny!(d3, d3_branch);
-        append_progeny!(d4, d4_branch);
 
         Attribute {
             half_life: entry.half_life,
@@ -142,5 +136,35 @@ fn check_decay_mode(
         )))
     } else {
         Ok(mode)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Attribute, NdxEntry};
+    use crate::nuclide::Nuclide;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_nuclides_in_ndx_entry() {
+        let data = "Ac-226    29.37h B-ECA      1944      1      0     0 Th-226   1108 8.3000E-01 Ra-226    822 1.7000E-01 Fr-222    361 6.0000E-05             0        0.0 0.0003 0.29143 0.13271  14 140   5   99   1 226.026097 1.048E-171.048E-17
+";
+        let entry: NdxEntry = fixed_width::from_str(data).unwrap();
+        let attr: Attribute = fixed_width::from_str(data).unwrap();
+
+        let parent = Nuclide::from_str("Ac-226").unwrap();
+        assert_eq!(entry.nuclide, parent);
+
+        let daughter1 = Nuclide::from_str("Th-226").unwrap();
+        assert_eq!(entry.progeny[0].unwrap().0, daughter1);
+        assert_eq!(attr.progeny[0].nuclide, daughter1);
+
+        let daughter2 = Nuclide::from_str("Ra-226").unwrap();
+        assert_eq!(entry.progeny[1].unwrap().0, daughter2);
+        assert_eq!(attr.progeny[1].nuclide, daughter2);
+
+        let daughter3 = Nuclide::from_str("Fr-222").unwrap();
+        assert_eq!(entry.progeny[2].unwrap().0, daughter3);
+        assert_eq!(attr.progeny[2].nuclide, daughter3);
     }
 }

@@ -63,8 +63,14 @@ pub struct HalfLife {
 }
 
 impl HalfLife {
+    /// Half-life in seconds
     pub fn as_sec(&self) -> f64 {
         self.value * self.unit.as_sec()
+    }
+
+    /// Decay constant (s^-1)
+    pub fn as_lambda(&self) -> f64 {
+        2.0_f64.ln() / self.as_sec()
     }
 }
 

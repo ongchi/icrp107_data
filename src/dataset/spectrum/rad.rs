@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use super::{RadiationType, Spectrum};
-use crate::derive_from_str_from_fixed_width;
+use crate::derive_from_str;
 use crate::error::Error;
 
 #[derive(Debug, FixedWidth, Deserialize)]
@@ -20,7 +20,7 @@ pub struct RadSpectrum {
     energy: f64,
 }
 
-derive_from_str_from_fixed_width!(RadSpectrum);
+derive_from_str!(RadSpectrum);
 
 impl From<RadSpectrum> for Spectrum {
     fn from(rad: RadSpectrum) -> Self {
