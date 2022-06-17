@@ -1,3 +1,4 @@
+#[macro_export(inner)]
 macro_rules! regex {
     ($re:literal $(,)?) => {{
         static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
@@ -5,6 +6,7 @@ macro_rules! regex {
     }};
 }
 
+#[macro_export(inner)]
 macro_rules! derive_from_str {
     ($type:ident) => {
         impl FromStr for $type {

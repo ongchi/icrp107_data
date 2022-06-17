@@ -7,6 +7,7 @@ use std::str::FromStr;
 
 use super::ndx::{Attribute, NdxEntry};
 use crate::error::Error;
+use crate::regex;
 use crate::Nuclide;
 
 pub struct FileReader(BufReader<File>);
@@ -26,9 +27,7 @@ impl FileReader {
 
     pub fn read_line(&mut self, buf: &mut String) -> Result<usize, Error> {
         buf.clear();
-        self.0
-            .read_line(buf)
-            .map_err(|e| Error::Unexpected(e.into()))
+        self.0.read_line(buf).map_err(std::convert::Into::into)
     }
 }
 
@@ -80,14 +79,12 @@ where
         while self.reader.read_line(&mut buf)? != 0 {
             let nuclide: Nuclide = (&buf[0..7]).parse()?;
             let records = &buf[7..].replace('\0', " ");
+            let records = records.split_whitespace().last().ok_or_else(|| {
+                Error::Unexpected(anyhow::anyhow!("failed to get spectrum for {}", nuclide))
+            })?;
             let records = records
-                .split_whitespace()
-                .last()
-                .ok_or_else(|| {
-                    Error::Unexpected(anyhow::anyhow!("failed to get spectrum for {}", nuclide))
-                })?
                 .parse()
-                .map_err(|_| Error::InvalidInteger(records.trim().to_string()))?;
+                .map_err(|_| Error::InvalidInteger(records.to_string()))?;
 
             let mut spectrum = vec![];
             for _ in 0..(records) {

@@ -18,11 +18,11 @@ static BET: OnceCell<HashMap<Nuclide, Vec<bet::BetSpectrum>>> = OnceCell::new();
 static ACK: OnceCell<HashMap<Nuclide, Vec<ack::AckSpectrum>>> = OnceCell::new();
 static NSF: OnceCell<HashMap<Nuclide, Vec<nsf::NsfSpectrum>>> = OnceCell::new();
 
-pub struct NuclideData {
+pub struct Dataset {
     path: PathBuf,
 }
 
-impl NuclideData {
+impl Dataset {
     pub fn open<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -54,7 +54,7 @@ impl NuclideData {
     }
 }
 
-impl DecayChain for NuclideData {
+impl DecayChain for Dataset {
     fn get_progeny(&self, nuclide: &Nuclide) -> Option<Vec<Progeny>> {
         self.ndx()
             .unwrap()

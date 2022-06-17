@@ -4,6 +4,6 @@ mod error;
 mod macros;
 mod nuclide;
 
-pub use dataset::NuclideData;
+pub use dataset::Dataset;
 pub use decay_chain::DecayChain;
-pub use nuclide::{DecayMode, HalfLife, Nuclide};
+pub use nuclide::{DecayMode, DecayModePrimitive, HalfLife, Nuclide};

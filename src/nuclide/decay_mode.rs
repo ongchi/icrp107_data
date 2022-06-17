@@ -3,9 +3,11 @@ use serde::{de::Visitor, Deserialize};
 
 use crate::regex;
 
+pub type DecayMode = FlagSet<DecayModePrimitive>;
+
 flags! {
     #[derive(Deserialize)]
-    pub enum DecayMode: u8 {
+    pub enum DecayModePrimitive: u8 {
         #[serde(rename = "A")]
         Alpha,
         #[serde(rename = "B-")]
@@ -21,7 +23,7 @@ flags! {
     }
 }
 
-impl std::fmt::Display for DecayMode {
+impl std::fmt::Display for DecayModePrimitive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -38,14 +40,14 @@ impl std::fmt::Display for DecayMode {
     }
 }
 
-pub fn deserialize<'de, D>(deserializer: D) -> Result<FlagSet<DecayMode>, D::Error>
+pub fn deserialize<'de, D>(deserializer: D) -> Result<DecayMode, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     struct DecayModeVisitor;
 
     impl<'de> Visitor<'de> for DecayModeVisitor {
-        type Value = FlagSet<DecayMode>;
+        type Value = DecayMode;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
             formatter.write_str("A|B-|B+|EC|IT|SF")
@@ -57,16 +59,16 @@ where
         {
             let re = regex!(r"A|B\-|B\+|EC|IT|SF");
 
-            let mut dm = FlagSet::default();
+            let mut mode = DecayMode::default();
             for captures in re.captures_iter(v) {
                 for capture in captures.iter() {
-                    let mode: DecayMode = serde_plain::from_str(capture.unwrap().as_str())
+                    let m: DecayModePrimitive = serde_plain::from_str(capture.unwrap().as_str())
                         .map_err(serde::de::Error::custom)?;
-                    dm |= mode;
+                    mode |= m;
                 }
             }
 
-            Ok(dm)
+            Ok(mode)
         }
     }
 
@@ -84,7 +86,9 @@ mod test {
 
         assert_eq!(
             mode,
-            DecayMode::Alpha | DecayMode::ElectronCapture | DecayMode::BetaMinus
+            DecayModePrimitive::Alpha
+                | DecayModePrimitive::ElectronCapture
+                | DecayModePrimitive::BetaMinus
         );
     }
 }

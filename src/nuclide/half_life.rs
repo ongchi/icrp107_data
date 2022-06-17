@@ -1,5 +1,7 @@
+use float_pretty_print::PrettyPrintFloat;
 use serde::Deserialize;
 use serde_with::DeserializeFromStr;
+use std::str::FromStr;
 
 use crate::error::Error;
 use crate::regex;
@@ -74,7 +76,7 @@ impl HalfLife {
     }
 }
 
-impl std::str::FromStr for HalfLife {
+impl FromStr for HalfLife {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -93,7 +95,7 @@ impl std::str::FromStr for HalfLife {
 
 impl std::fmt::Display for HalfLife {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.value, self.unit)
+        write!(f, "{}{}", PrettyPrintFloat(self.value), self.unit)
     }
 }
 

@@ -1,5 +1,9 @@
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("invalid symbol: {0}")]
+    InvalidSymbol(String),
+    #[error("invalid state: {0}")]
+    InvalidState(String),
     #[error("invalid nuclide: {0}")]
     InvalidNuclide(String),
     #[error("invalid half life: {0}")]
@@ -14,4 +18,10 @@ pub enum Error {
     InvalidInteger(String),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        e.into()
+    }
 }
