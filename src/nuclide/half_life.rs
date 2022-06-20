@@ -80,7 +80,9 @@ impl FromStr for HalfLife {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = regex!(r"(?P<value>\d+\.?(?:\d+)?(?:[Ee][+-]?\d+)?)(?P<unit>(?:[um]?s)|m|h|d|y)");
+        let re = regex!(
+            r"(?P<value>\d+\.?(?:\d+)?(?:[Ee][+-]?\d+)?)(?:\s?)(?P<unit>(?:[um]?s)|m|h|d|y)"
+        );
 
         let captures = re
             .captures(s)
@@ -95,7 +97,11 @@ impl FromStr for HalfLife {
 
 impl std::fmt::Display for HalfLife {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", PrettyPrintFloat(self.value), self.unit)
+        let number_str = PrettyPrintFloat(self.value).to_string();
+        match number_str.strip_suffix(".0") {
+            Some(number_str) => write!(f, "{} {}", number_str, self.unit),
+            None => write!(f, "{} {}", number_str, self.unit),
+        }
     }
 }
 
@@ -109,7 +115,7 @@ mod test {
 
     #[test]
     fn halflife_from_string() {
-        let t1: HalfLife = "1us".parse().unwrap();
+        let t1: HalfLife = "1 us".parse().unwrap();
         assert!(isclose(t1.value, 1.));
         assert_eq!(t1.unit, TimeUnit::MicroSecond);
 
@@ -120,15 +126,22 @@ mod test {
         let t3: HalfLife = "10y".parse().unwrap();
         assert!(isclose(t3.value, 10.));
         assert_eq!(t3.unit, TimeUnit::Year);
+
+        let t4: HalfLife = "1.1 s".parse().unwrap();
+        assert!(isclose(t4.value, 1.1));
+        assert_eq!(t4.unit, TimeUnit::Second);
     }
 
     #[test]
     fn halflife_to_string() {
         let t1: HalfLife = "1us".parse().unwrap();
-        assert_eq!(t1.to_string(), "1μs");
+        assert_eq!(t1.to_string(), "1 μs");
 
         let t2: HalfLife = "10y".parse().unwrap();
-        assert_eq!(t2.to_string(), "10y");
+        assert_eq!(t2.to_string(), "10 y");
+
+        let t3: HalfLife = "1.1s".parse().unwrap();
+        assert_eq!(t3.to_string(), "1.1 s");
     }
 
     #[test]

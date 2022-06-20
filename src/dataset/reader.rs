@@ -7,8 +7,8 @@ use std::str::FromStr;
 
 use super::ndx::{Attribute, NdxEntry};
 use crate::error::Error;
+use crate::nuclide::Nuclide;
 use crate::regex;
-use crate::Nuclide;
 
 pub struct FileReader(BufReader<File>);
 

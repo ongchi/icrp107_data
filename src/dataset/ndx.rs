@@ -3,9 +3,7 @@ use serde::Deserialize;
 
 use super::reader;
 use crate::error::Error;
-use crate::nuclide::{
-    decay_mode, DecayMode, DecayModePrimitive, HalfLife, MaybeNuclide, Nuclide, Progeny,
-};
+use crate::nuclide::{decay_mode, DecayMode, DecayModePrimitive, HalfLife, Nuclide, Progeny};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NdxEntry {
@@ -13,7 +11,7 @@ pub(crate) struct NdxEntry {
     pub half_life: HalfLife,
     #[serde(with = "decay_mode")]
     pub decay_mode: DecayMode,
-    pub progeny: Vec<Option<(MaybeNuclide, f64)>>,
+    pub progeny: Vec<Option<(Nuclide, f64)>>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
     pub photon_energy: f64,
@@ -71,10 +69,10 @@ impl From<NdxEntry> for Attribute {
             match daughter {
                 Some((nuclide, branch_rate)) => {
                     let decay_mode = match nuclide {
-                        MaybeNuclide::Nuclide(d) => {
-                            check_decay_mode(entry.nuclide, d, entry.decay_mode).unwrap()
+                        Nuclide::WithId(_) => {
+                            check_decay_mode(entry.nuclide, nuclide, entry.decay_mode).unwrap()
                         }
-                        MaybeNuclide::SF => {
+                        Nuclide::FissionProducts => {
                             DecayMode::default() | DecayModePrimitive::SpontaneousFission
                         }
                     };
@@ -113,10 +111,10 @@ fn check_decay_mode(
     daughter: Nuclide,
     decay_mode: DecayMode,
 ) -> Result<DecayMode, Error> {
-    let z = parent.z();
-    let d_z = daughter.z();
-    let a = parent.a();
-    let d_a = daughter.a();
+    let z = parent.z().unwrap();
+    let d_z = daughter.z().unwrap();
+    let a = parent.a().unwrap();
+    let d_a = daughter.a().unwrap();
 
     let mut mode = DecayMode::default();
 
@@ -144,7 +142,7 @@ fn check_decay_mode(
 #[cfg(test)]
 mod test {
     use super::{Attribute, NdxEntry};
-    use crate::nuclide::{MaybeNuclide, Nuclide};
+    use crate::nuclide::Nuclide;
     use std::str::FromStr;
 
     #[test]
@@ -157,15 +155,15 @@ mod test {
         let parent = Nuclide::from_str("Ac-226").unwrap();
         assert_eq!(entry.nuclide, parent);
 
-        let daughter1 = MaybeNuclide::from_str("Th-226").unwrap();
+        let daughter1 = Nuclide::from_str("Th-226").unwrap();
         assert_eq!(entry.progeny[0].unwrap().0, daughter1);
         assert_eq!(attr.progeny[0].nuclide, daughter1);
 
-        let daughter2 = MaybeNuclide::from_str("Ra-226").unwrap();
+        let daughter2 = Nuclide::from_str("Ra-226").unwrap();
         assert_eq!(entry.progeny[1].unwrap().0, daughter2);
         assert_eq!(attr.progeny[1].nuclide, daughter2);
 
-        let daughter3 = MaybeNuclide::from_str("Fr-222").unwrap();
+        let daughter3 = Nuclide::from_str("Fr-222").unwrap();
         assert_eq!(entry.progeny[2].unwrap().0, daughter3);
         assert_eq!(attr.progeny[2].nuclide, daughter3);
     }

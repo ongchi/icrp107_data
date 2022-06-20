@@ -4,8 +4,8 @@ pub mod half_life;
 pub use decay_mode::{DecayMode, DecayModePrimitive};
 pub use half_life::HalfLife;
 
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::ToPrimitive;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
 use std::fmt::Display;
@@ -17,7 +17,7 @@ use crate::regex;
 
 #[rustfmt::skip]
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromPrimitive)]
 pub enum Symbol {
     H = 1, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Al, Si, P, S, Cl, Ar, K, Ca,
     Sc, Ti, V, Cr, Mn, Fe, Co, Ni, Cu, Zn, Ga, Ge, As, Se, Br, Kr, Rb, Sr, Y,
@@ -28,13 +28,19 @@ pub enum Symbol {
     Lv, Ts, Og,
 }
 
+impl Symbol {
+    pub fn from_z(z: u8) -> Option<Self> {
+        FromPrimitive::from_u8(z)
+    }
+}
+
 serde_plain::derive_fromstr_from_deserialize!(Symbol, |e| -> Error {
     Error::InvalidSymbol(e.to_string())
 });
 serde_plain::derive_display_from_serialize!(Symbol);
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromPrimitive, ToPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, FromPrimitive)]
 pub enum MetastableState {
     #[serde(rename = "m")]
     M = 1,
@@ -47,43 +53,52 @@ serde_plain::derive_fromstr_from_deserialize!(MetastableState, |e| -> Error {
 });
 serde_plain::derive_display_from_serialize!(MetastableState);
 
-#[derive(Debug, Default, Hash, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
-pub struct Nuclide(
-    /// Canonical id (zzzaaammmm)
-    u32,
-);
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, DeserializeFromStr)]
+pub enum Nuclide {
+    /// Nuclide with canonical id
+    WithId(u32),
+    /// Spontaneous fission products
+    FissionProducts,
+}
 
 impl Nuclide {
-    pub fn z(&self) -> u32 {
-        self.0 / 10_000_000
+    pub fn id(&self) -> Option<u32> {
+        match self {
+            Self::WithId(id) => Some(*id),
+            Self::FissionProducts => None,
+        }
     }
 
-    pub fn a(&self) -> u32 {
-        (self.0 / 10_000) % 1_000
+    pub fn z(&self) -> Option<u32> {
+        self.id().map(|id| id / 10_000_000)
     }
 
-    pub fn symbol(&self) -> Symbol {
-        num_traits::FromPrimitive::from_u8(self.z() as u8).unwrap()
+    pub fn a(&self) -> Option<u32> {
+        self.id().map(|id| (id / 10_000) % 1_000)
     }
 
     pub fn state(&self) -> Option<MetastableState> {
-        match self.0 % 10 {
-            0 => None,
-            state @ (1 | 2) => Some(num_traits::FromPrimitive::from_u8(state as u8)).unwrap(),
-            _ => panic!("Invalid metastable state"),
+        match self.id() {
+            Some(id) => FromPrimitive::from_u8((id % 10) as u8),
+            None => None,
         }
     }
 }
 
-impl std::fmt::Display for Nuclide {
+impl Display for Nuclide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}-{}{}",
-            self.symbol(),
-            self.a(),
-            self.state().map_or("".to_string(), |m| m.to_string())
-        )?;
+        match self {
+            Self::WithId(_) => {
+                write!(
+                    f,
+                    "{}-{}{}",
+                    Symbol::from_z(self.z().unwrap() as u8).unwrap(),
+                    self.a().unwrap(),
+                    self.state().map_or("".to_string(), |m| m.to_string())
+                )?;
+            }
+            Self::FissionProducts => write!(f, "various")?,
+        }
 
         Ok(())
     }
@@ -97,72 +112,43 @@ impl FromStr for Nuclide {
 
         match re.captures(s) {
             Some(captures) => {
-                let mut nuclide_id = 0;
+                let symbol_str = captures
+                    .name("symbol")
+                    .map(|m| m.as_str())
+                    .ok_or(Error::InvalidNuclide(s.to_string()))?;
 
-                nuclide_id += match captures.name("symbol") {
-                    Some(s) => s.as_str().parse::<Symbol>()?.to_u32().unwrap(),
-                    None => 0,
-                } * 10_000_000;
+                if symbol_str == "SF" {
+                    Ok(Self::FissionProducts)
+                } else {
+                    let mut id = 0;
 
-                nuclide_id += match captures.name("mass") {
-                    Some(m) => {
-                        let m = m.as_str();
-                        m.parse()
-                            .map_err(|_| Error::InvalidInteger(m.to_string()))?
-                    }
-                    None => 0,
-                } * 10_000;
+                    id += (symbol_str.parse::<Symbol>()? as u32) * 10_000_000;
 
-                nuclide_id += match captures.name("state") {
-                    Some(s) => s.as_str().parse::<MetastableState>()?.to_u32().unwrap(),
-                    None => 0,
-                };
+                    id += match captures.name("mass") {
+                        Some(m) => {
+                            let m = m.as_str();
+                            m.parse()
+                                .map_err(|_| Error::InvalidInteger(m.to_string()))?
+                        }
+                        None => 0,
+                    } * 10_000;
 
-                Ok(Nuclide(nuclide_id))
+                    id += match captures.name("state") {
+                        Some(s) => s.as_str().parse::<MetastableState>()? as u32,
+                        None => 0,
+                    };
+
+                    Ok(Self::WithId(id))
+                }
             }
             None => Err(Error::InvalidNuclide(s.to_string())),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
-pub enum MaybeNuclide {
-    Nuclide(Nuclide),
-    SF,
-}
-
-impl Display for MaybeNuclide {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Nuclide(n) => write!(f, "{}", n)?,
-            Self::SF => write!(f, "various")?,
-        }
-
-        Ok(())
-    }
-}
-
-impl FromStr for MaybeNuclide {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "SF" {
-            Ok(MaybeNuclide::SF)
-        } else {
-            Ok(MaybeNuclide::Nuclide(s.parse()?))
-        }
-    }
-}
-
-impl From<Nuclide> for MaybeNuclide {
-    fn from(nuclide: Nuclide) -> Self {
-        Self::Nuclide(nuclide)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Progeny {
-    pub nuclide: MaybeNuclide,
+    pub nuclide: Nuclide,
     pub branch_rate: f64,
     pub decay_mode: DecayMode,
 }
@@ -174,10 +160,10 @@ mod test {
     #[test]
     fn nuclide_from_string() {
         let i131: Nuclide = "I-131".parse().unwrap();
-        assert_eq!(i131.0, 531310000);
+        assert_eq!(i131.id().unwrap(), 531310000);
 
         let tc99m: Nuclide = "Tc-99m".parse().unwrap();
-        assert_eq!(tc99m.0, 430990001);
+        assert_eq!(tc99m.id().unwrap(), 430990001);
     }
 
     #[test]

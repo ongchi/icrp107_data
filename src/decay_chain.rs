@@ -1,12 +1,11 @@
+use crate::nuclide::{DecayMode, HalfLife, Nuclide, Progeny};
 use float_pretty_print::PrettyPrintFloat;
 use petgraph::{graph::NodeIndex, Graph};
 use std::collections::HashSet;
 
-use crate::nuclide::{DecayMode, HalfLife, MaybeNuclide, Nuclide, Progeny};
-
 #[derive(Clone, Copy)]
 pub struct Node {
-    nuclide: MaybeNuclide,
+    nuclide: Nuclide,
     half_life: Option<HalfLife>,
 }
 
@@ -49,12 +48,12 @@ pub trait DecayChain {
 
     fn get_half_life(&self, nuclide: &Nuclide) -> Option<HalfLife>;
 
-    fn build_graph<N: Into<MaybeNuclide>>(&self, root: N) -> Graph<Node, Edge> {
+    fn build_graph<N: Into<Nuclide>>(&self, root: N) -> Graph<Node, Edge> {
         let mut graph: Graph<Node, Edge> = Graph::new();
 
-        let mut get_or_insert_node = |nuclide: MaybeNuclide| -> NodeIndex {
+        let mut get_or_insert_node = |nuclide: Nuclide| -> NodeIndex {
             match nuclide {
-                MaybeNuclide::Nuclide(nuc) => {
+                Nuclide::WithId(_) => {
                     match graph
                         .raw_nodes()
                         .iter()
@@ -62,32 +61,32 @@ pub trait DecayChain {
                     {
                         Some(i) => NodeIndex::new(i),
                         None => {
-                            let half_life = self.get_half_life(&nuc);
+                            let half_life = self.get_half_life(&nuclide);
                             graph.add_node(Node { nuclide, half_life })
                         }
                     }
                 }
-                MaybeNuclide::SF => {
+                Nuclide::FissionProducts => {
                     let half_life = None;
                     graph.add_node(Node { nuclide, half_life })
                 }
             }
         };
 
-        let mut stack: Vec<MaybeNuclide> = vec![root.into()];
+        let mut stack: Vec<Nuclide> = vec![root.into()];
         let mut visited = HashSet::new();
         let mut edges = vec![];
         while !stack.is_empty() {
             match stack.pop().unwrap() {
-                parent @ MaybeNuclide::Nuclide(nuc) => {
+                parent @ Nuclide::WithId(nuc) => {
                     visited.insert(nuc);
 
-                    match self.get_progeny(&nuc) {
+                    match self.get_progeny(&parent) {
                         Some(progeny) => {
                             let p_node = get_or_insert_node(parent);
                             for daughter in progeny {
                                 {
-                                    if let MaybeNuclide::Nuclide(d) = daughter.nuclide {
+                                    if let Nuclide::WithId(d) = daughter.nuclide {
                                         if !visited.contains(&d) {
                                             stack.push(daughter.nuclide)
                                         }
@@ -105,7 +104,7 @@ pub trait DecayChain {
                         None => {}
                     };
                 }
-                MaybeNuclide::SF => {}
+                Nuclide::FissionProducts => {}
             }
         }
         for (p_node, d_node, weight) in edges {
