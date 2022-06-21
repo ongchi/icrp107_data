@@ -109,26 +109,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
-name = "icrp107_dataset"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fixed_width",
- "fixed_width_derive",
- "flagset",
- "float-pretty-print",
- "num-derive",
- "num-traits",
- "once_cell",
- "petgraph",
- "regex",
- "serde",
- "serde_plain",
- "serde_with",
- "thiserror",
-]
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -202,6 +182,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "864d3e96a899863136fc6e99f3d7cae289dafe43bf2c5ac19b70df7210c0a145"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "radioactive"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fixed_width",
+ "fixed_width_derive",
+ "flagset",
+ "float-pretty-print",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "petgraph",
+ "regex",
+ "serde",
+ "serde_plain",
+ "serde_with",
+ "thiserror",
 ]
 
 [[package]]

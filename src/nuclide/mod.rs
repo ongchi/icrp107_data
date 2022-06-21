@@ -53,7 +53,7 @@ serde_plain::derive_fromstr_from_deserialize!(MetastableState, |e| -> Error {
 });
 serde_plain::derive_display_from_serialize!(MetastableState);
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, DeserializeFromStr)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, DeserializeFromStr)]
 pub enum Nuclide {
     /// Nuclide with canonical id
     WithId(u32),
@@ -115,7 +115,7 @@ impl FromStr for Nuclide {
                 let symbol_str = captures
                     .name("symbol")
                     .map(|m| m.as_str())
-                    .ok_or(Error::InvalidNuclide(s.to_string()))?;
+                    .ok_or_else(|| Error::InvalidNuclide(s.to_string()))?;
 
                 if symbol_str == "SF" {
                     Ok(Self::FissionProducts)

@@ -1,7 +1,11 @@
-use crate::nuclide::{DecayMode, HalfLife, Nuclide, Progeny};
+use std::collections::HashSet;
+
 use float_pretty_print::PrettyPrintFloat;
 use petgraph::{graph::NodeIndex, Graph};
-use std::collections::HashSet;
+
+use super::DecayData;
+use crate::error::Error;
+use crate::nuclide::{DecayMode, HalfLife, Nuclide};
 
 #[derive(Clone, Copy)]
 pub struct Node {
@@ -43,12 +47,23 @@ impl std::fmt::Display for Edge {
     }
 }
 
-pub trait DecayChain {
-    fn get_progeny(&self, nuclide: &Nuclide) -> Option<Vec<Progeny>>;
+pub type DecayChain = Graph<Node, Edge>;
 
-    fn get_half_life(&self, nuclide: &Nuclide) -> Option<HalfLife>;
+pub struct DecayChainBuilder<'a, T> {
+    data: &'a T,
+}
 
-    fn build_graph<N: Into<Nuclide>>(&self, root: N) -> Graph<Node, Edge> {
+impl<'a, D> DecayChainBuilder<'a, D>
+where
+    D: DecayData,
+{
+    pub fn new(data: &'a D) -> Self {
+        Self { data }
+    }
+
+    pub fn build(self, root: &Nuclide) -> Result<DecayChain, Error> {
+        let _ = self.data.check_nuclide(root)?;
+
         let mut graph: Graph<Node, Edge> = Graph::new();
 
         let mut get_or_insert_node = |nuclide: Nuclide| -> NodeIndex {
@@ -61,7 +76,7 @@ pub trait DecayChain {
                     {
                         Some(i) => NodeIndex::new(i),
                         None => {
-                            let half_life = self.get_half_life(&nuclide);
+                            let half_life = self.data.half_life(&nuclide).ok();
                             graph.add_node(Node { nuclide, half_life })
                         }
                     }
@@ -73,23 +88,22 @@ pub trait DecayChain {
             }
         };
 
-        let mut stack: Vec<Nuclide> = vec![root.into()];
+        let mut stack: Vec<&Nuclide> = vec![root];
         let mut visited = HashSet::new();
         let mut edges = vec![];
-        while !stack.is_empty() {
-            match stack.pop().unwrap() {
-                parent @ Nuclide::WithId(nuc) => {
-                    visited.insert(nuc);
 
-                    match self.get_progeny(&parent) {
+        while let Some(parent) = stack.pop() {
+            match parent {
+                Nuclide::WithId(_) => {
+                    visited.insert(parent);
+
+                    match self.data.progeny(parent).ok() {
                         Some(progeny) => {
-                            let p_node = get_or_insert_node(parent);
+                            let p_node = get_or_insert_node(*parent);
                             for daughter in progeny {
                                 {
-                                    if let Nuclide::WithId(d) = daughter.nuclide {
-                                        if !visited.contains(&d) {
-                                            stack.push(daughter.nuclide)
-                                        }
+                                    if !visited.contains(&daughter.nuclide) {
+                                        stack.push(&daughter.nuclide)
                                     }
 
                                     let d_node = get_or_insert_node(daughter.nuclide);
@@ -111,6 +125,6 @@ pub trait DecayChain {
             graph.add_edge(p_node, d_node, weight);
         }
 
-        graph
+        Ok(graph)
     }
 }
