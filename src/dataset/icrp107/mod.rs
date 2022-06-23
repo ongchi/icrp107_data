@@ -55,28 +55,28 @@ impl Icrp107 {
 }
 
 impl DecayData for Icrp107 {
-    fn check_nuclide(&self, nuclide: &Nuclide) -> Result<(), Error> {
+    fn check_nuclide(&self, nuclide: Nuclide) -> Result<(), Error> {
         self.ndx()?
-            .get(nuclide)
+            .get(&nuclide)
             .map(|_| ())
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
 
-    fn progeny(&self, nuclide: &Nuclide) -> Result<&[Progeny], Error> {
+    fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error> {
         self.ndx()?
-            .get(nuclide)
+            .get(&nuclide)
             .map(|attr| attr.progeny.as_slice())
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
 
-    fn half_life(&self, nuclide: &Nuclide) -> Result<HalfLife, Error> {
+    fn half_life(&self, nuclide: Nuclide) -> Result<HalfLife, Error> {
         self.ndx()?
-            .get(nuclide)
+            .get(&nuclide)
             .map(|attr| attr.half_life)
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
 
-    fn lambda(&self, nuclide: &Nuclide) -> Result<f64, Error> {
+    fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error> {
         self.half_life(nuclide).map(|t| t.as_lambda())
     }
 }

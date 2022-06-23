@@ -61,7 +61,7 @@ where
         Self { data }
     }
 
-    pub fn build(self, root: &Nuclide) -> Result<DecayChain, Error> {
+    pub fn build(self, root: Nuclide) -> Result<DecayChain, Error> {
         let _ = self.data.check_nuclide(root)?;
 
         let mut graph: Graph<Node, Edge> = Graph::new();
@@ -76,7 +76,7 @@ where
                     {
                         Some(i) => NodeIndex::new(i),
                         None => {
-                            let half_life = self.data.half_life(&nuclide).ok();
+                            let half_life = self.data.half_life(nuclide).ok();
                             graph.add_node(Node { nuclide, half_life })
                         }
                     }
@@ -88,7 +88,7 @@ where
             }
         };
 
-        let mut stack: Vec<&Nuclide> = vec![root];
+        let mut stack: Vec<Nuclide> = vec![root];
         let mut visited = HashSet::new();
         let mut edges = vec![];
 
@@ -99,11 +99,11 @@ where
 
                     match self.data.progeny(parent).ok() {
                         Some(progeny) => {
-                            let p_node = get_or_insert_node(*parent);
+                            let p_node = get_or_insert_node(parent);
                             for daughter in progeny {
                                 {
                                     if !visited.contains(&daughter.nuclide) {
-                                        stack.push(&daughter.nuclide)
+                                        stack.push(daughter.nuclide)
                                     }
 
                                     let d_node = get_or_insert_node(daughter.nuclide);
