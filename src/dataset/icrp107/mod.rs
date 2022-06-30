@@ -23,11 +23,7 @@ pub struct Icrp107 {
 }
 
 impl Icrp107 {
-    pub fn open<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let path = path.as_ref();
+    pub fn open(path: &Path) -> Result<Self, Error> {
         Ok(Self {
             path: path.to_path_buf(),
         })

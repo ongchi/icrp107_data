@@ -53,7 +53,7 @@ impl TimeUnit {
             Self::Minute => 60.,
             Self::Hour => 3_600.,
             Self::Day => 86_400.,
-            Self::Year => 365.2422 * 86400.,
+            Self::Year => 365.2422 * 86_400.,
         }
     }
 }
