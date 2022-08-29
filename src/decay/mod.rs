@@ -2,8 +2,10 @@ mod graph;
 
 pub use graph::{DecayChain, DecayChainBuilder};
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::Deref;
+use std::rc::Rc;
 
 use crate::error::Error;
 use crate::nuclide::{HalfLife, Nuclide, Progeny};
@@ -29,12 +31,12 @@ impl Deref for Inventory {
     }
 }
 
-pub struct InventoryFactory<'a> {
+pub struct InventoryBuilder<'a> {
     data: &'a dyn DecayData,
     inner: Inventory,
 }
 
-impl<'a> InventoryFactory<'a> {
+impl<'a> InventoryBuilder<'a> {
     pub fn new(data: &'a dyn DecayData) -> Self {
         Self {
             data,
@@ -42,31 +44,35 @@ impl<'a> InventoryFactory<'a> {
         }
     }
 
-    pub fn add(&mut self, nuclide: Nuclide, activity: f64) -> Result<(), Error> {
+    pub fn add(self, nuclide: Nuclide, activity: f64) -> Result<Self, Error> {
         self.data.check_nuclide(nuclide)?;
-        self.add_unchecked(nuclide, activity);
 
-        Ok(())
+        Ok(self.add_unchecked(nuclide, activity))
     }
 
-    pub fn add_unchecked(&mut self, nuclide: Nuclide, activity: f64) {
-        *self.inner.0.entry(nuclide).or_insert(0.0) += activity;
+    pub fn add_unchecked(mut self, nuclide: Nuclide, activity: f64) -> Self {
+        let inner = &mut self.inner.0;
+        *inner.entry(nuclide).or_insert(0.0) += activity;
+
+        self
     }
 
-    pub fn remove(&mut self, nuclide: Nuclide) -> Result<(), Error> {
+    pub fn remove(mut self, nuclide: Nuclide) -> Result<Self, Error> {
         self.inner.0.remove_entry(&nuclide);
 
-        Ok(())
+        Ok(self)
     }
 
-    pub fn zero_out(&mut self) {
+    pub fn zero_out(mut self) -> Self {
         for (_, a) in self.inner.0.iter_mut() {
             *a = 0.;
         }
+
+        self
     }
 
-    pub fn export(&mut self) -> Inventory {
-        Inventory(std::mem::take(&mut self.inner.0))
+    pub fn build(self) -> Inventory {
+        self.inner
     }
 }
 
@@ -74,33 +80,33 @@ type CachedData = BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>;
 
 pub struct BatemanDecaySolver<'a> {
     decay_data: &'a dyn DecayData,
-    cache: BTreeMap<Nuclide, CachedData>,
+    cache: RefCell<BTreeMap<Nuclide, Rc<CachedData>>>,
 }
 
 impl<'a> BatemanDecaySolver<'a> {
     pub fn new(decay_data: &'a dyn DecayData) -> Self {
         Self {
             decay_data,
-            cache: BTreeMap::new(),
+            cache: RefCell::new(BTreeMap::new()),
         }
     }
 
     /// Decay calculation for decay_time in seconds.
-    pub fn decay(&mut self, inventory: &Inventory, decay_time: u64) -> Inventory {
-        let mut inv_factory = InventoryFactory::new(self.decay_data);
+    pub fn decay(&self, inventory: &Inventory, decay_time: u64) -> Inventory {
+        let mut inv_factory = InventoryBuilder::new(self.decay_data);
 
         for (&nuclide, &activity) in inventory.iter() {
             let decay_data = self.get_decay_data(nuclide);
             let n0 = activity / self.decay_data.lambda(nuclide).unwrap();
             for (nuc, a) in self.bateman_eq(&decay_data, n0, decay_time) {
-                inv_factory.add_unchecked(nuc, a);
+                inv_factory = inv_factory.add_unchecked(nuc, a);
             }
         }
 
-        inv_factory.export()
+        inv_factory.build()
     }
 
-    fn bateman_eq(&mut self, decay_data: &CachedData, n0: f64, t: u64) -> BTreeMap<Nuclide, f64> {
+    fn bateman_eq(&self, decay_data: &CachedData, n0: f64, t: u64) -> BTreeMap<Nuclide, f64> {
         let mut res = BTreeMap::new();
         for (nuc, data) in decay_data {
             for (br, lamb) in data {
@@ -119,8 +125,9 @@ impl<'a> BatemanDecaySolver<'a> {
         res
     }
 
-    fn get_decay_data(&mut self, parent: Nuclide) -> CachedData {
+    fn get_decay_data(&self, parent: Nuclide) -> Rc<CachedData> {
         self.cache
+            .borrow_mut()
             .entry(parent)
             .or_insert({
                 let mut stack = vec![(
@@ -151,7 +158,7 @@ impl<'a> BatemanDecaySolver<'a> {
                     }
                 }
 
-                decay_data
+                Rc::new(decay_data)
             })
             .clone()
     }

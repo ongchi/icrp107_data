@@ -15,10 +15,9 @@ pub struct IndexReader {
 }
 
 impl IndexReader {
-    pub fn new(path: &Path) -> Self {
-        Self {
-            reader: FileReader::new(path).skip_lines(1),
-        }
+    pub fn new(path: &Path) -> Result<Self, Error> {
+        let reader = FileReader::new(path)?.skip_lines(1)?;
+        Ok(Self { reader })
     }
 
     pub fn read(&mut self) -> Result<HashMap<Nuclide, Attribute>, Error> {
@@ -44,11 +43,11 @@ impl<T> SpectrumReader<T>
 where
     T: FromStr<Err = Error>,
 {
-    pub fn new(path: &Path) -> Self {
-        Self {
-            reader: FileReader::new(path),
+    pub fn new(path: &Path) -> Result<Self, Error> {
+        Ok(Self {
+            reader: FileReader::new(path)?,
             _marker: std::marker::PhantomData,
-        }
+        })
     }
 
     pub fn read(&mut self) -> Result<HashMap<Nuclide, Vec<T>>, Error> {

@@ -1,3 +1,5 @@
+use crate::atten_coef::Energy;
+
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("invalid symbol: {0}")]
@@ -16,6 +18,8 @@ pub enum Error {
     InvalidFloat(String),
     #[error("invalid integer: {0}")]
     InvalidInteger(String),
+    #[error("invalid energy: {0}")]
+    InvalidEnergy(Energy),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
 }

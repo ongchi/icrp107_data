@@ -12,10 +12,9 @@ pub struct MaterialConstantReader {
 }
 
 impl MaterialConstantReader {
-    pub fn new(path: &Path) -> Self {
-        Self {
-            reader: FileReader::new(&path.join("material_constants")).skip_lines(2),
-        }
+    pub fn new(path: &Path) -> Result<Self, Error> {
+        let reader = FileReader::new(path)?.skip_lines(2)?;
+        Ok(Self { reader })
     }
 
     pub fn read(&mut self) -> Result<BTreeMap<Symbol, MaterialConstant>, Error> {
@@ -37,10 +36,9 @@ pub struct MassAttenCoefReader {
 }
 
 impl MassAttenCoefReader {
-    pub fn new(path: &Path, z: u8) -> Self {
-        Self {
-            reader: FileReader::new(&path.join(format!("{:02}", z))).skip_lines(2),
-        }
+    pub fn new(path: &Path, z: u8) -> Result<Self, Error> {
+        let reader = FileReader::new(&path.join(format!("{:02}", z)))?.skip_lines(2)?;
+        Ok(Self { reader })
     }
 
     pub fn read(&mut self) -> Result<Vec<MassAttenCoefRecord>, Error> {

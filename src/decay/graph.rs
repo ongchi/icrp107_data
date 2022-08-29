@@ -62,7 +62,7 @@ where
     }
 
     pub fn build(self, root: Nuclide) -> Result<DecayChain, Error> {
-        let _ = self.data.check_nuclide(root)?;
+        self.data.check_nuclide(root)?;
 
         let mut graph: Graph<Node, Edge> = Graph::new();
 

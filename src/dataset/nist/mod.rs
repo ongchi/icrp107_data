@@ -8,12 +8,10 @@ use num_traits::FromPrimitive;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 
+use crate::atten_coef::{AttenCoefData, Energy, Material};
 use crate::error::Error;
 use crate::nuclide::Symbol;
 use reader::{MassAttenCoefReader, MaterialConstantReader};
-
-/// Energy in keV
-pub type Energy = u32;
 
 static MATEAIAL_CONSTANTS: OnceCell<BTreeMap<Symbol, MaterialConstant>> = OnceCell::new();
 static ATTENUATION_COEF: OnceCell<BTreeMap<Symbol, BTreeMap<Energy, MassAttenCoef>>> =
@@ -37,6 +35,7 @@ pub struct MaterialConstantRecord {
     density: f64,
 }
 
+#[derive(Debug)]
 pub struct MaterialConstant {
     /// Z/A
     pub z_over_a: f64,
@@ -71,6 +70,7 @@ pub struct MassAttenCoefRecord {
     mu_en_over_rho: f64,
 }
 
+#[derive(Debug)]
 pub struct MassAttenCoef {
     pub mu_over_rho: f64,
     pub mu_en_over_rho: f64,
@@ -90,15 +90,19 @@ pub struct NistMassAttenCoef {
 }
 
 impl NistMassAttenCoef {
-    pub fn open(path: &Path) -> Result<Self, Error> {
-        Ok(Self {
-            path: path.to_path_buf(),
-        })
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let path = path.as_ref().to_path_buf();
+
+        if path.is_dir() {
+            Ok(Self { path })
+        } else {
+            Err(Error::Unexpected(anyhow::anyhow!("Invalid data path")))
+        }
     }
 
     pub fn material_constants(&self) -> Result<&BTreeMap<Symbol, MaterialConstant>, Error> {
         MATEAIAL_CONSTANTS.get_or_try_init(|| {
-            MaterialConstantReader::new(&self.path.join("material_constants")).read()
+            MaterialConstantReader::new(&self.path.join("material_constants"))?.read()
         })
     }
 
@@ -110,10 +114,10 @@ impl NistMassAttenCoef {
 
             for z in 1..=92 {
                 let symbol: Symbol = FromPrimitive::from_u8(z).unwrap();
-                let value = MassAttenCoefReader::new(&self.path, z)
+                let value = MassAttenCoefReader::new(&self.path, z)?
                     .read()?
                     .into_iter()
-                    .map(|r| ((r.energy * 1000.) as u32, r.into()))
+                    .map(|r| ((r.energy * 1_000_000f64) as u32, r.into()))
                     .collect();
 
                 content.insert(symbol, value);
@@ -121,5 +125,39 @@ impl NistMassAttenCoef {
 
             Ok(content)
         })
+    }
+}
+
+impl AttenCoefData for NistMassAttenCoef {
+    fn mass_number(&self, symbol: Symbol) -> Result<f64, Error> {
+        self.material_constants()?
+            .get(&symbol)
+            .map(|r| ((symbol as u8) as f64) / r.z_over_a)
+            .ok_or_else(|| Error::InvalidSymbol(symbol.to_string()))
+    }
+
+    fn mass_attenuation_coefficient(
+        &self,
+        material: &Material,
+        energy: Energy,
+    ) -> Result<f64, Error> {
+        let mut coef = 0f64;
+
+        for (symbol, wf) in material.weight_fraction() {
+            coef += wf
+                * self
+                    .mass_atten_coef()?
+                    .get(symbol)
+                    .unwrap()
+                    .get(&energy)
+                    .map(|r| r.mu_over_rho)
+                    .ok_or(Error::InvalidEnergy(energy))?;
+        }
+
+        Ok(coef)
+    }
+
+    fn mfp(&self, material: &Material, energy: Energy) -> Result<f64, Error> {
+        Ok((self.mass_attenuation_coefficient(material, energy)? * material.density()).recip())
     }
 }

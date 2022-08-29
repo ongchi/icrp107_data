@@ -7,16 +7,16 @@ use crate::error::Error;
 pub struct FileReader(BufReader<File>);
 
 impl FileReader {
-    pub fn new(path: &Path) -> Self {
-        Self(BufReader::new(File::open(path).unwrap()))
+    pub fn new(path: &Path) -> Result<Self, Error> {
+        Ok(Self(BufReader::new(File::open(path)?)))
     }
 
-    pub fn skip_lines(mut self, n: usize) -> Self {
+    pub fn skip_lines(mut self, n: usize) -> Result<Self, Error> {
         let mut buf = vec![];
         for _ in 0..n {
-            self.0.read_until(b'\n', &mut buf).unwrap();
+            self.0.read_until(b'\n', &mut buf)?;
         }
-        self
+        Ok(self)
     }
 
     pub fn read_line(&mut self, buf: &mut String) -> Result<usize, Error> {

@@ -146,6 +146,12 @@ impl FromStr for Nuclide {
     }
 }
 
+impl From<Symbol> for Nuclide {
+    fn from(s: Symbol) -> Self {
+        Self::WithId((s as u32) * 10_000_000)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Progeny {
     pub nuclide: Nuclide,
