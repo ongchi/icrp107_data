@@ -5,7 +5,7 @@ use super::super::reader::FileReader;
 use super::{MassAttenCoefRecord, MaterialConstant, MaterialConstantRecord};
 
 use crate::error::Error;
-use crate::nuclide::Symbol;
+use crate::primitive::Symbol;
 
 pub struct MaterialConstantReader {
     reader: FileReader,

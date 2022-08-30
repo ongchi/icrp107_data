@@ -3,9 +3,8 @@ use std::collections::HashSet;
 use float_pretty_print::PrettyPrintFloat;
 use petgraph::{graph::NodeIndex, Graph};
 
-use super::DecayData;
-use crate::error::Error;
-use crate::nuclide::{DecayMode, HalfLife, Nuclide};
+use crate::primitive::attr::{NuclideHalfLife, NuclideProgeny};
+use crate::primitive::{DecayModeFlagSet, HalfLife, Nuclide};
 
 #[derive(Clone, Copy)]
 pub struct Node {
@@ -30,7 +29,7 @@ impl std::fmt::Display for Node {
 #[derive(Clone)]
 pub struct Edge {
     branch_rate: f64,
-    decay_mode: DecayMode,
+    decay_mode: DecayModeFlagSet,
 }
 
 impl std::fmt::Display for Edge {
@@ -55,15 +54,13 @@ pub struct DecayChainBuilder<'a, T> {
 
 impl<'a, D> DecayChainBuilder<'a, D>
 where
-    D: DecayData,
+    D: NuclideHalfLife + NuclideProgeny,
 {
     pub fn new(data: &'a D) -> Self {
         Self { data }
     }
 
-    pub fn build(self, root: Nuclide) -> Result<DecayChain, Error> {
-        self.data.check_nuclide(root)?;
-
+    pub fn build(self, root: Nuclide) -> DecayChain {
         let mut graph: Graph<Node, Edge> = Graph::new();
 
         let mut get_or_insert_node = |nuclide: Nuclide| -> NodeIndex {
@@ -125,6 +122,6 @@ where
             graph.add_edge(p_node, d_node, weight);
         }
 
-        Ok(graph)
+        graph
     }
 }

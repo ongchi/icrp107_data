@@ -8,9 +8,10 @@ use num_traits::FromPrimitive;
 use once_cell::sync::OnceCell;
 use serde::Deserialize;
 
-use crate::atten_coef::{AttenCoefData, Energy, Material};
 use crate::error::Error;
-use crate::nuclide::Symbol;
+use crate::primitive::attr::{AtomicMass, Energy, MassAttenuationCoefficient, MeanFreePath};
+use crate::primitive::notation::Material;
+use crate::primitive::Symbol;
 use reader::{MassAttenCoefReader, MaterialConstantReader};
 
 static MATEAIAL_CONSTANTS: OnceCell<BTreeMap<Symbol, MaterialConstant>> = OnceCell::new();
@@ -128,14 +129,16 @@ impl NistMassAttenCoef {
     }
 }
 
-impl AttenCoefData for NistMassAttenCoef {
-    fn mass_number(&self, symbol: Symbol) -> Result<f64, Error> {
+impl AtomicMass for NistMassAttenCoef {
+    fn atomic_mass(&self, symbol: Symbol) -> Result<f64, Error> {
         self.material_constants()?
             .get(&symbol)
             .map(|r| ((symbol as u8) as f64) / r.z_over_a)
             .ok_or_else(|| Error::InvalidSymbol(symbol.to_string()))
     }
+}
 
+impl MassAttenuationCoefficient for NistMassAttenCoef {
     fn mass_attenuation_coefficient(
         &self,
         material: &Material,
@@ -156,7 +159,9 @@ impl AttenCoefData for NistMassAttenCoef {
 
         Ok(coef)
     }
+}
 
+impl MeanFreePath for NistMassAttenCoef {
     fn mfp(&self, material: &Material, energy: Energy) -> Result<f64, Error> {
         Ok((self.mass_attenuation_coefficient(material, energy)? * material.density()).recip())
     }

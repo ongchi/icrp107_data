@@ -6,9 +6,9 @@ use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::decay::DecayData;
 use crate::error::Error;
-use crate::nuclide::{HalfLife, Nuclide, Progeny};
+use crate::primitive::attr::{DecayConstant, NuclideHalfLife, NuclideProgeny};
+use crate::primitive::{HalfLife, Nuclide, Progeny};
 use reader::{IndexReader, SpectrumReader};
 use spectrum::{ack, bet, nsf, rad};
 
@@ -54,28 +54,25 @@ impl Icrp107 {
     }
 }
 
-impl DecayData for Icrp107 {
-    fn check_nuclide(&self, nuclide: Nuclide) -> Result<(), Error> {
-        self.ndx()?
-            .get(&nuclide)
-            .map(|_| ())
-            .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
-    }
-
+impl NuclideProgeny for Icrp107 {
     fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error> {
         self.ndx()?
             .get(&nuclide)
             .map(|attr| attr.progeny.as_slice())
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
+}
 
+impl NuclideHalfLife for Icrp107 {
     fn half_life(&self, nuclide: Nuclide) -> Result<HalfLife, Error> {
         self.ndx()?
             .get(&nuclide)
             .map(|attr| attr.half_life)
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
+}
 
+impl DecayConstant for Icrp107 {
     fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error> {
         self.half_life(nuclide).map(|t| t.as_lambda())
     }

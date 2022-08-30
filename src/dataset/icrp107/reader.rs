@@ -7,7 +7,7 @@ use super::super::reader::FileReader;
 use super::ndx::{Attribute, NdxEntry};
 
 use crate::error::Error;
-use crate::nuclide::Nuclide;
+use crate::primitive::Nuclide;
 use crate::regex;
 
 pub struct IndexReader {

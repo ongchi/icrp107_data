@@ -1,7 +1,9 @@
-use crate::atten_coef::Energy;
+use crate::primitive::attr::Energy;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("invalid atomic number: {0}")]
+    InvalidAtomicNumber(u8),
     #[error("invalid symbol: {0}")]
     InvalidSymbol(String),
     #[error("invalid state: {0}")]

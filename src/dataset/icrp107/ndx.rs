@@ -3,14 +3,15 @@ use serde::Deserialize;
 
 use super::reader;
 use crate::error::Error;
-use crate::nuclide::{decay_mode, DecayMode, DecayModePrimitive, HalfLife, Nuclide, Progeny};
+use crate::primitive::nuclide::decay_mode;
+use crate::primitive::{DecayMode, DecayModeFlagSet, HalfLife, Nuclide, Progeny};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NdxEntry {
     pub nuclide: Nuclide,
     pub half_life: HalfLife,
     #[serde(with = "decay_mode")]
-    pub decay_mode: DecayMode,
+    pub decay_mode: DecayModeFlagSet,
     pub progeny: Vec<Option<(Nuclide, f64)>>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
@@ -40,7 +41,7 @@ impl FixedWidth for NdxEntry {
 #[serde(from = "NdxEntry")]
 pub struct Attribute {
     pub half_life: HalfLife,
-    pub decay_mode: DecayMode,
+    pub decay_mode: DecayModeFlagSet,
     pub progeny: Vec<Progeny>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
@@ -73,7 +74,7 @@ impl From<NdxEntry> for Attribute {
                             check_decay_mode(entry.nuclide, nuclide, entry.decay_mode).unwrap()
                         }
                         Nuclide::FissionProducts => {
-                            DecayMode::default() | DecayModePrimitive::SpontaneousFission
+                            DecayModeFlagSet::default() | DecayMode::SpontaneousFission
                         }
                     };
 
@@ -109,23 +110,23 @@ impl From<NdxEntry> for Attribute {
 fn check_decay_mode(
     parent: Nuclide,
     daughter: Nuclide,
-    decay_mode: DecayMode,
-) -> Result<DecayMode, Error> {
+    decay_mode: DecayModeFlagSet,
+) -> Result<DecayModeFlagSet, Error> {
     let z = parent.z().unwrap();
     let d_z = daughter.z().unwrap();
     let a = parent.a().unwrap();
     let d_a = daughter.a().unwrap();
 
-    let mut mode = DecayMode::default();
+    let mut mode = DecayModeFlagSet::default();
 
     if z == d_z && a == d_a {
-        mode |= DecayModePrimitive::IsometricTransition & decay_mode;
+        mode |= DecayMode::IsometricTransition & decay_mode;
     } else if z == d_z + 2 && a == d_a + 4 {
-        mode |= DecayModePrimitive::Alpha & decay_mode;
+        mode |= DecayMode::Alpha & decay_mode;
     } else if z + 1 == d_z && a == d_a {
-        mode |= DecayModePrimitive::BetaMinus & decay_mode;
+        mode |= DecayMode::BetaMinus & decay_mode;
     } else if z == d_z + 1 && a == d_a {
-        mode |= (DecayModePrimitive::BetaPlus | DecayModePrimitive::ElectronCapture) & decay_mode;
+        mode |= (DecayMode::BetaPlus | DecayMode::ElectronCapture) & decay_mode;
     }
 
     if mode.is_empty() {
@@ -142,7 +143,7 @@ fn check_decay_mode(
 #[cfg(test)]
 mod test {
     use super::{Attribute, NdxEntry};
-    use crate::nuclide::Nuclide;
+    use crate::primitive::Nuclide;
     use std::str::FromStr;
 
     #[test]
