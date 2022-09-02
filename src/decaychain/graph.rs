@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use float_pretty_print::PrettyPrintFloat;
 use petgraph::{graph::NodeIndex, Graph};
@@ -48,15 +49,15 @@ impl std::fmt::Display for Edge {
 
 pub type DecayChain = Graph<Node, Edge>;
 
-pub struct DecayChainBuilder<'a, T> {
-    data: &'a T,
+pub struct DecayChainBuilder<D> {
+    data: Arc<D>,
 }
 
-impl<'a, D> DecayChainBuilder<'a, D>
+impl<D> DecayChainBuilder<D>
 where
     D: NuclideHalfLife + NuclideProgeny,
 {
-    pub fn new(data: &'a D) -> Self {
+    pub fn new(data: Arc<D>) -> Self {
         Self { data }
     }
 

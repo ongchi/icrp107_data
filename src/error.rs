@@ -1,3 +1,5 @@
+use chumsky::prelude::Simple;
+
 use crate::primitive::attr::Energy;
 
 #[derive(thiserror::Error, Debug)]
@@ -28,6 +30,12 @@ pub enum Error {
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
+        e.into()
+    }
+}
+
+impl From<Vec<Simple<char>>> for Error {
+    fn from(e: Vec<Simple<char>>) -> Self {
         e.into()
     }
 }

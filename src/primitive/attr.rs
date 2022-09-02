@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
+use super::notation::{Material, Symbol};
+use super::nuclide::{HalfLife, Nuclide, Progeny};
 use crate::error::Error;
-use crate::primitive::notation::Material;
-use crate::primitive::nuclide::{HalfLife, Nuclide, Progeny};
-use crate::primitive::Symbol;
 
 /// Energy in eV
 pub type Energy = u32;

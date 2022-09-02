@@ -1,6 +1,7 @@
 mod reader;
 
 use std::path::Path;
+use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
 use fixed_width_derive::FixedWidth;
@@ -91,11 +92,11 @@ pub struct NistMassAttenCoef {
 }
 
 impl NistMassAttenCoef {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, Error> {
         let path = path.as_ref().to_path_buf();
 
         if path.is_dir() {
-            Ok(Self { path })
+            Ok(Arc::new(Self { path }))
         } else {
             Err(Error::Unexpected(anyhow::anyhow!("Invalid data path")))
         }

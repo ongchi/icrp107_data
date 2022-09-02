@@ -2,15 +2,16 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::str::FromStr;
 
+use chumsky::prelude::{end, Parser};
 use float_pretty_print::PrettyPrintFloat;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use serde_with::DeserializeFromStr;
 
+use super::notation::Symbol;
+use super::parser::{halflife, nuclide};
 use crate::error::Error;
-use crate::primitive::Symbol;
-use crate::regex;
 
 pub use decay_mode::{DecayMode, DecayModeFlagSet};
 
@@ -71,41 +72,7 @@ impl FromStr for Nuclide {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = regex!(r"(?P<symbol>\w+)((?:-)(?P<mass>\d+)(?P<state>\w)?)?");
-
-        match re.captures(s) {
-            Some(captures) => {
-                let symbol_str = captures
-                    .name("symbol")
-                    .map(|m| m.as_str())
-                    .ok_or_else(|| Error::InvalidNuclide(s.to_string()))?;
-
-                if symbol_str == "SF" {
-                    Ok(Self::FissionProducts)
-                } else {
-                    let mut id = 0;
-
-                    id += (symbol_str.parse::<Symbol>()? as u32) * 10_000_000;
-
-                    id += match captures.name("mass") {
-                        Some(m) => {
-                            let m = m.as_str();
-                            m.parse()
-                                .map_err(|_| Error::InvalidInteger(m.to_string()))?
-                        }
-                        None => 0,
-                    } * 10_000;
-
-                    id += match captures.name("state") {
-                        Some(s) => s.as_str().parse::<MetastableState>()? as u32,
-                        None => 0,
-                    };
-
-                    Ok(Self::WithId(id))
-                }
-            }
-            None => Err(Error::InvalidNuclide(s.to_string())),
-        }
+        nuclide().then_ignore(end()).parse(s).map_err(|e| e.into())
     }
 }
 
@@ -131,10 +98,14 @@ pub struct Progeny {
 }
 
 pub mod decay_mode {
+    use std::str::FromStr;
+
+    use chumsky::prelude::{end, Parser};
     use flagset::{flags, FlagSet};
     use serde::{de::Visitor, Deserialize};
 
-    use crate::regex;
+    use crate::error::Error;
+    use crate::primitive::parser::{decaymode, decaymodeflags};
 
     pub type DecayModeFlagSet = FlagSet<DecayMode>;
 
@@ -153,6 +124,17 @@ pub mod decay_mode {
             IsometricTransition,
             #[serde(rename = "SF")]
             SpontaneousFission,
+        }
+    }
+
+    impl FromStr for DecayMode {
+        type Err = Error;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            decaymode()
+                .then_ignore(end())
+                .parse(s)
+                .map_err(|e| e.into())
         }
     }
 
@@ -190,16 +172,10 @@ pub mod decay_mode {
             where
                 E: serde::de::Error,
             {
-                let re = regex!(r"A|B\-|B\+|EC|IT|SF");
-
-                let mut mode = DecayModeFlagSet::default();
-                for captures in re.captures_iter(v) {
-                    for capture in captures.iter() {
-                        let m: DecayMode = serde_plain::from_str(capture.unwrap().as_str())
-                            .map_err(serde::de::Error::custom)?;
-                        mode |= m;
-                    }
-                }
+                let mode = decaymodeflags()
+                    .then_ignore(end())
+                    .parse(v)
+                    .map_err(|_| serde::de::Error::custom("Invalid decay mode"))?;
 
                 Ok(mode)
             }
@@ -283,18 +259,7 @@ impl FromStr for HalfLife {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = regex!(
-            r"(?P<value>\d+\.?(?:\d+)?(?:[Ee][+-]?\d+)?)(?:\s?)(?P<unit>(?:[um]?s)|m|h|d|y)"
-        );
-
-        let captures = re
-            .captures(s)
-            .ok_or_else(|| Error::InvalidHalfLife(s.to_string()))?;
-
-        let value = captures.name("value").unwrap().as_str().parse().unwrap();
-        let unit = captures.name("unit").unwrap().as_str().parse().unwrap();
-
-        Ok(Self { value, unit })
+        halflife().then_ignore(end()).parse(s).map_err(|e| e.into())
     }
 }
 
@@ -305,6 +270,12 @@ impl std::fmt::Display for HalfLife {
             Some(number_str) => write!(f, "{} {}", number_str, self.unit),
             None => write!(f, "{} {}", number_str, self.unit),
         }
+    }
+}
+
+impl PartialEq for HalfLife {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_sec() == other.as_sec()
     }
 }
 

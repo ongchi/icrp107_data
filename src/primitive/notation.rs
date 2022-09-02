@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::str::FromStr;
+use std::sync::Arc;
 
-use chumsky::prelude::{end, filter, just, recursive, Parser, Simple};
+use chumsky::prelude::{end, Parser};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::primitive::attr::AtomicMass;
+use crate::primitive::parser::molecular;
 
 #[rustfmt::skip]
 #[repr(u8)]
@@ -36,7 +38,7 @@ serde_plain::derive_fromstr_from_deserialize!(Symbol, |e| -> Error {
 });
 serde_plain::derive_display_from_serialize!(Symbol);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Molecular {
     Element(Symbol, u32),
     Compound(Vec<Molecular>, u32),
@@ -68,10 +70,13 @@ impl Display for Molecular {
 }
 
 impl FromStr for Molecular {
-    type Err = Vec<Simple<char>>;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        molecular_parser().parse(s)
+        molecular()
+            .then_ignore(end())
+            .parse(s)
+            .map_err(|e| e.into())
     }
 }
 
@@ -94,51 +99,19 @@ impl Molecular {
     }
 }
 
-fn molecular_parser() -> impl Parser<char, Molecular, Error = Simple<char>> {
-    let number = filter(|c: &char| c.is_ascii_digit())
-        .repeated()
-        .map(|s| s.into_iter().collect::<String>().parse().unwrap_or(1));
-
-    let symbol = filter(|c: &char| c.is_ascii_uppercase())
-        .chain(filter(|c: &char| c.is_ascii_lowercase()).repeated())
-        .try_map(|chs, span| {
-            chs.into_iter()
-                .collect::<String>()
-                .parse::<Symbol>()
-                .map_err(|e| Simple::custom(span, format!("{}", e)))
-        });
-
-    let element = symbol.then(number).map(|(s, n)| Molecular::Element(s, n));
-
-    let compound = recursive(|expr| {
-        element
-            .or(expr
-                .delimited_by(just('('), just(')'))
-                .then(number)
-                .map(|(mole, n)| Molecular::Compound(mole, n)))
-            .repeated()
-            .at_least(1)
-    });
-
-    compound.then_ignore(end()).map(|mole| {
-        if mole.len() == 1 {
-            mole.into_iter().next().unwrap()
-        } else {
-            Molecular::Compound(mole, 1)
-        }
-    })
-}
-
-pub struct MaterialBuilder<'a> {
-    data: &'a dyn AtomicMass,
+pub struct MaterialBuilder<D> {
+    data: Arc<D>,
     composition: BTreeMap<Symbol, f64>,
     weight_fraction: BTreeMap<Symbol, f64>,
     density: Option<f64>,
     weight: Option<f64>,
 }
 
-impl<'a> MaterialBuilder<'a> {
-    pub fn new(data: &'a dyn AtomicMass) -> Self {
+impl<D> MaterialBuilder<D>
+where
+    D: AtomicMass,
+{
+    pub fn new(data: Arc<D>) -> Self {
         Self {
             data,
             composition: BTreeMap::new(),
@@ -269,7 +242,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn molecular_formula_parser() {
+    fn molecular() {
         let ether: Molecular = "(C2H5)2O".parse().unwrap();
         let mut composition: BTreeMap<Symbol, u32> = BTreeMap::new();
         composition.insert(Symbol::H, 10);

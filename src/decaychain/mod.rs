@@ -2,15 +2,15 @@ mod graph;
 
 pub use graph::{DecayChain, DecayChainBuilder};
 
-use std::cell::RefCell;
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::ops::Deref;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use crate::primitive::attr::{DecayConstant, NuclideProgeny};
 use crate::primitive::Nuclide;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Inventory(BTreeMap<Nuclide, f64>);
 
 impl Deref for Inventory {
@@ -42,96 +42,101 @@ impl Default for Inventory {
     }
 }
 
-type CachedData = BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>;
+type CachedNode = Arc<BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>>;
+type CachedData = RwLock<BTreeMap<Nuclide, CachedNode>>;
 
-pub struct BatemanDecaySolver<'a, D>
-where
-    D: NuclideProgeny + DecayConstant,
-{
-    decay_data: &'a D,
-    cache: RefCell<BTreeMap<Nuclide, Rc<CachedData>>>,
+pub struct BatemanDecaySolver<D> {
+    decay_data: Arc<D>,
+    cache: CachedData,
 }
 
-impl<'a, D> BatemanDecaySolver<'a, D>
+impl<D> BatemanDecaySolver<D>
 where
     D: NuclideProgeny + DecayConstant,
 {
-    pub fn new(decay_data: &'a D) -> Self {
-        Self {
+    pub fn new(decay_data: Arc<D>) -> Arc<Self> {
+        Arc::new(Self {
             decay_data,
-            cache: RefCell::new(BTreeMap::new()),
-        }
+            cache: RwLock::new(BTreeMap::new()),
+        })
     }
 
     /// Decay calculation for decay_time in seconds.
-    pub fn decay(&self, inventory: &Inventory, decay_time: u64) -> Inventory {
-        let mut new_inv = Inventory::new();
+    pub fn decay(&self, inventory: &Inventory, decay_time: f64) -> Inventory {
+        let mut inv = Inventory::new();
 
         for (&nuclide, &activity) in inventory.iter() {
-            if let Some(decay_data) = self.get_decay_data(nuclide) {
+            if let Some(bateman_res) = self.bateman_eq(nuclide, decay_time) {
                 let n0 = activity / self.decay_data.lambda(nuclide).unwrap();
-                for (nuc, a) in self.bateman_eq(&decay_data, n0, decay_time) {
-                    new_inv.add(nuc, a);
+                for (nuc, lamb) in bateman_res {
+                    inv.add(nuc, lamb * n0);
                 }
             }
         }
 
-        new_inv
+        inv
     }
 
-    fn bateman_eq(&self, decay_data: &CachedData, n0: f64, t: u64) -> BTreeMap<Nuclide, f64> {
-        let mut res = BTreeMap::new();
-        for (nuc, data) in decay_data {
-            for (br, lamb) in data {
-                *res.entry(*nuc).or_insert(0.) += n0
-                    * (lamb.iter().product::<f64>() * br.iter().product::<f64>())
-                    * (lamb.iter().map(|&li| {
-                        (-li * (t as f64)).exp()
-                            / (lamb.iter().map(|&lj| lj - li))
-                                .filter(|&l| l != 0.)
-                                .product::<f64>()
-                    }))
-                    .sum::<f64>();
+    // Bateman Equation
+    pub fn bateman_eq(&self, nuclide: Nuclide, dt: f64) -> Option<BTreeMap<Nuclide, f64>> {
+        if let Some(decay_vars) = self.decay_vars(nuclide) {
+            let mut res = BTreeMap::new();
+            for (&nuc, cache) in decay_vars.iter() {
+                for (br, lamb) in cache {
+                    let val: f64 = lamb.iter().chain(br.iter()).product();
+                    let val = val
+                        * (lamb.iter())
+                            .map(|li| {
+                                (-li * dt).exp()
+                                    / (lamb.iter().map(|lj| lj - li))
+                                        .filter(|v| v != &0.)
+                                        .product::<f64>()
+                            })
+                            .sum::<f64>();
+                    *res.entry(nuc).or_insert(0.) += val;
+                }
             }
-        }
 
-        res
+            Some(res)
+        } else {
+            None
+        }
     }
 
-    fn get_decay_data(&self, parent: Nuclide) -> Option<Rc<CachedData>> {
-        Some(
-            self.cache
-                .borrow_mut()
-                .entry(parent)
-                .or_insert({
-                    let mut stack =
-                        vec![(parent, vec![], vec![self.decay_data.lambda(parent).ok()?])];
+    // Variables for calculate with Bateman Equation
+    fn decay_vars(&self, parent: Nuclide) -> Option<CachedNode> {
+        let cache = self.cache.read().unwrap();
 
-                    let mut decay_data = BTreeMap::new();
+        if let Some(decay_vars) = cache.get(&parent) {
+            Some(decay_vars.clone())
+        } else {
+            drop(cache);
 
-                    while let Some((parent, br, lambda)) = stack.pop() {
-                        decay_data.entry(parent).or_insert(vec![]).push((
-                            br.iter()
-                                .take(std::cmp::max(0, br.len() as i32 - 1) as usize)
-                                .copied()
-                                .collect(),
-                            lambda.clone(),
-                        ));
+            let mut stack = vec![(parent, vec![], vec![self.decay_data.lambda(parent).ok()?])];
+            let mut decay_vars = BTreeMap::new();
 
-                        for daughter in self.decay_data.progeny(parent).unwrap() {
-                            let mut br = br.clone();
-                            br.push(daughter.branch_rate);
-                            let mut lambda = lambda.clone();
-                            if let Ok(lambda_d) = self.decay_data.lambda(daughter.nuclide) {
-                                lambda.push(lambda_d);
-                                stack.push((daughter.nuclide, br, lambda));
-                            }
-                        }
+            while let Some((parent, br, lambda)) = stack.pop() {
+                decay_vars.entry(parent).or_insert(vec![]).push((
+                    br.iter().take(max(0usize, br.len() - 1)).copied().collect(),
+                    lambda.clone(),
+                ));
+
+                for daughter in self.decay_data.progeny(parent).unwrap() {
+                    let mut br = br.clone();
+                    br.push(daughter.branch_rate);
+                    let mut lambda = lambda.clone();
+                    if let Ok(lambda_d) = self.decay_data.lambda(daughter.nuclide) {
+                        lambda.push(lambda_d);
+                        stack.push((daughter.nuclide, br, lambda));
                     }
+                }
+            }
 
-                    Rc::new(decay_data)
-                })
-                .clone(),
-        )
+            let mut cache = self.cache.write().unwrap();
+            let decay_vars = Arc::new(decay_vars);
+            cache.insert(parent, decay_vars.clone());
+
+            Some(decay_vars)
+        }
     }
 }

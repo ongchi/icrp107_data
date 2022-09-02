@@ -5,6 +5,7 @@ mod spectrum;
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::error::Error;
 use crate::primitive::attr::{DecayConstant, NuclideHalfLife, NuclideProgeny};
@@ -23,11 +24,11 @@ pub struct Icrp107 {
 }
 
 impl Icrp107 {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, Error> {
         let path = path.as_ref().to_path_buf();
 
         if path.is_dir() {
-            Ok(Self { path })
+            Ok(Arc::new(Self { path }))
         } else {
             Err(Error::Unexpected(anyhow::anyhow!("Invalid data path")))
         }
