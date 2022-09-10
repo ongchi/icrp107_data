@@ -10,7 +10,7 @@ use once_cell::sync::OnceCell;
 use serde::Deserialize;
 
 use crate::error::Error;
-use crate::primitive::attr::{AtomicMass, Energy, MassAttenuationCoefficient, MeanFreePath};
+use crate::primitive::attr::{AtomicMass, Energy, MassAttenuationCoefficient};
 use crate::primitive::notation::Material;
 use crate::primitive::Symbol;
 use reader::{MassAttenCoefReader, MaterialConstantReader};
@@ -159,11 +159,5 @@ impl MassAttenuationCoefficient for NistMassAttenCoef {
         }
 
         Ok(coef)
-    }
-}
-
-impl MeanFreePath for NistMassAttenCoef {
-    fn mfp(&self, material: &Material, energy: Energy) -> Result<f64, Error> {
-        Ok((self.mass_attenuation_coefficient(material, energy)? * material.density()).recip())
     }
 }

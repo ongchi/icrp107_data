@@ -21,6 +21,15 @@ pub trait DecayConstant {
     fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error>;
 }
 
+impl<T> DecayConstant for T
+where
+    T: NuclideHalfLife,
+{
+    fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error> {
+        self.half_life(nuclide).map(|hl| hl.as_lambda())
+    }
+}
+
 pub trait AtomicMass {
     /// Atomic mass (amu)
     fn atomic_mass(&self, symbol: Symbol) -> Result<f64, Error>;
@@ -38,6 +47,16 @@ pub trait MassAttenuationCoefficient {
 pub trait MeanFreePath {
     /// Mean free path (cm)
     fn mfp(&self, material: &Material, energy: Energy) -> Result<f64, Error>;
+}
+
+impl<T> MeanFreePath for T
+where
+    T: MassAttenuationCoefficient,
+{
+    fn mfp(&self, material: &Material, energy: Energy) -> Result<f64, Error> {
+        self.mass_attenuation_coefficient(material, energy)
+            .map(|mu_over_rho| (mu_over_rho * material.density()).recip())
+    }
 }
 
 pub trait EffectiveAtomicNumber {

@@ -8,12 +8,12 @@ use crate::primitive::attr::{NuclideHalfLife, NuclideProgeny};
 use crate::primitive::{DecayModeFlagSet, HalfLife, Nuclide};
 
 #[derive(Clone, Copy)]
-pub struct Node {
+pub struct ChainNode {
     nuclide: Nuclide,
     half_life: Option<HalfLife>,
 }
 
-impl std::fmt::Display for Node {
+impl std::fmt::Display for ChainNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -28,12 +28,12 @@ impl std::fmt::Display for Node {
 }
 
 #[derive(Clone)]
-pub struct Edge {
+pub struct ChainEdge {
     branch_rate: f64,
     decay_mode: DecayModeFlagSet,
 }
 
-impl std::fmt::Display for Edge {
+impl std::fmt::Display for ChainEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", PrettyPrintFloat(self.branch_rate))?;
         for (i, mode) in self.decay_mode.into_iter().enumerate() {
@@ -47,7 +47,7 @@ impl std::fmt::Display for Edge {
     }
 }
 
-pub type DecayChain = Graph<Node, Edge>;
+pub type DecayChain = Graph<ChainNode, ChainEdge>;
 
 pub struct DecayChainBuilder<D> {
     data: Arc<D>,
@@ -62,7 +62,7 @@ where
     }
 
     pub fn build(self, root: Nuclide) -> DecayChain {
-        let mut graph: Graph<Node, Edge> = Graph::new();
+        let mut graph: Graph<ChainNode, ChainEdge> = Graph::new();
 
         let mut get_or_insert_node = |nuclide: Nuclide| -> NodeIndex {
             match nuclide {
@@ -75,13 +75,13 @@ where
                         Some(i) => NodeIndex::new(i),
                         None => {
                             let half_life = self.data.half_life(nuclide).ok();
-                            graph.add_node(Node { nuclide, half_life })
+                            graph.add_node(ChainNode { nuclide, half_life })
                         }
                     }
                 }
                 Nuclide::FissionProducts => {
                     let half_life = None;
-                    graph.add_node(Node { nuclide, half_life })
+                    graph.add_node(ChainNode { nuclide, half_life })
                 }
             }
         };
@@ -105,7 +105,7 @@ where
                                     }
 
                                     let d_node = get_or_insert_node(daughter.nuclide);
-                                    let weight = Edge {
+                                    let weight = ChainEdge {
                                         branch_rate: daughter.branch_rate,
                                         decay_mode: daughter.decay_mode,
                                     };
@@ -124,5 +124,99 @@ where
         }
 
         graph
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::error::Error;
+    use crate::primitive::{DecayMode, DecayModeFlagSet, Progeny, TimeUnit};
+
+    struct TestData {
+        pub mo99: Nuclide,
+        pub tc99m: Nuclide,
+        pub progeny: Vec<Progeny>,
+    }
+
+    impl TestData {
+        pub fn new() -> Self {
+            let mo99 = "Mo-99".parse().unwrap();
+            let tc99m = "Tc-99m".parse().unwrap();
+
+            let progeny = Progeny {
+                nuclide: tc99m,
+                branch_rate: 1.0,
+                decay_mode: DecayModeFlagSet::default() | "IT".parse::<DecayMode>().unwrap(),
+            };
+
+            Self {
+                mo99,
+                tc99m,
+                progeny: vec![progeny],
+            }
+        }
+    }
+
+    impl NuclideHalfLife for TestData {
+        fn half_life(&self, nuclide: Nuclide) -> Result<HalfLife, Error> {
+            if nuclide == self.mo99 {
+                Ok(HalfLife {
+                    value: 2.7489,
+                    unit: TimeUnit::Day,
+                })
+            } else if nuclide == self.tc99m {
+                Ok(HalfLife {
+                    value: 6.0067,
+                    unit: TimeUnit::Hour,
+                })
+            } else {
+                Err(Error::InvalidNuclide("not found".to_string()))
+            }
+        }
+    }
+
+    impl NuclideProgeny for TestData {
+        fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error> {
+            if nuclide == self.mo99 {
+                Ok(&self.progeny)
+            } else {
+                Err(Error::InvalidNuclide("not found".to_string()))
+            }
+        }
+    }
+
+    #[test]
+    fn chain_builder() {
+        let data = Arc::new(TestData::new());
+        // let root = data.mo99.clone();
+        let chain = DecayChainBuilder::new(data.clone()).build(data.mo99.clone());
+
+        let nodes = chain.raw_nodes();
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].weight.nuclide, data.mo99);
+        assert_eq!(
+            nodes[0].weight.half_life,
+            Some(HalfLife {
+                value: 2.7489,
+                unit: TimeUnit::Day
+            })
+        );
+        assert_eq!(nodes[1].weight.nuclide, data.tc99m);
+        assert_eq!(
+            nodes[1].weight.half_life,
+            Some(HalfLife {
+                value: 6.0067,
+                unit: TimeUnit::Hour,
+            })
+        );
+
+        let edges = chain.raw_edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].weight.branch_rate, 1.0);
+        assert_eq!(
+            edges[0].weight.decay_mode,
+            DecayModeFlagSet::default() | DecayMode::IsometricTransition
+        );
     }
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::error::Error;
-use crate::primitive::attr::{DecayConstant, NuclideHalfLife, NuclideProgeny};
+use crate::primitive::attr::{NuclideHalfLife, NuclideProgeny};
 use crate::primitive::{HalfLife, Nuclide, Progeny};
 use reader::{IndexReader, SpectrumReader};
 use spectrum::{ack, bet, nsf, rad};
@@ -70,11 +70,5 @@ impl NuclideHalfLife for Icrp107 {
             .get(&nuclide)
             .map(|attr| attr.half_life)
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
-    }
-}
-
-impl DecayConstant for Icrp107 {
-    fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error> {
-        self.half_life(nuclide).map(|t| t.as_lambda())
     }
 }

@@ -241,15 +241,46 @@ impl Material {
 mod test {
     use super::*;
 
+    struct TestData;
+
+    impl AtomicMass for TestData {
+        fn atomic_mass(&self, symbol: Symbol) -> Result<f64, Error> {
+            if symbol == Symbol::H {
+                Ok(1.)
+            } else if symbol == Symbol::O {
+                Ok(3.)
+            } else {
+                Err(Error::InvalidSymbol(symbol.to_string()))
+            }
+        }
+    }
+
     #[test]
     fn molecular() {
         let ether: Molecular = "(C2H5)2O".parse().unwrap();
-        let mut composition: BTreeMap<Symbol, u32> = BTreeMap::new();
-        composition.insert(Symbol::H, 10);
-        composition.insert(Symbol::C, 4);
-        composition.insert(Symbol::O, 1);
 
         assert_eq!(format!("{}", ether), "(C2H5)2O");
-        assert_eq!(ether.composition(), composition);
+        assert_eq!(ether.composition().get(&Symbol::H), Some(&10));
+        assert_eq!(ether.composition().get(&Symbol::C), Some(&4));
+        assert_eq!(ether.composition().get(&Symbol::O), Some(&1));
+    }
+
+    #[test]
+    fn material() {
+        let data = Arc::new(TestData {});
+        let material = MaterialBuilder::new(data)
+            .formula("HO")
+            .unwrap()
+            .weight(1.)
+            .density(1.)
+            .build()
+            .unwrap();
+
+        assert_eq!(material.weight(), 1.);
+        assert_eq!(material.density(), 1.);
+        assert_eq!(material.composition().get(&Symbol::H), Some(&1.));
+        assert_eq!(material.composition().get(&Symbol::O), Some(&1.));
+        assert_eq!(material.weight_fraction().get(&Symbol::H), Some(&0.25));
+        assert_eq!(material.weight_fraction().get(&Symbol::O), Some(&0.75));
     }
 }

@@ -2,7 +2,6 @@ mod graph;
 
 pub use graph::{DecayChain, DecayChainBuilder};
 
-use std::cmp::max;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::{Arc, RwLock};
@@ -47,7 +46,7 @@ type CachedData = RwLock<BTreeMap<Nuclide, CachedNode>>;
 
 pub struct BatemanDecaySolver<D> {
     decay_data: Arc<D>,
-    cache: CachedData,
+    pub cache: CachedData,
 }
 
 impl<D> BatemanDecaySolver<D>
@@ -67,9 +66,8 @@ where
 
         for (&nuclide, &activity) in inventory.iter() {
             if let Some(bateman_res) = self.bateman_eq(nuclide, decay_time) {
-                let n0 = activity / self.decay_data.lambda(nuclide).unwrap();
-                for (nuc, lamb) in bateman_res {
-                    inv.add(nuc, lamb * n0);
+                for (nuc, res) in bateman_res {
+                    inv.add(nuc, activity * res);
                 }
             }
         }
@@ -78,22 +76,21 @@ where
     }
 
     // Bateman Equation
-    pub fn bateman_eq(&self, nuclide: Nuclide, dt: f64) -> Option<BTreeMap<Nuclide, f64>> {
-        if let Some(decay_vars) = self.decay_vars(nuclide) {
+    fn bateman_eq(&self, nuclide: Nuclide, dt: f64) -> Option<BTreeMap<Nuclide, f64>> {
+        if let Some(cache) = self.cached_vars(nuclide) {
             let mut res = BTreeMap::new();
-            for (&nuc, cache) in decay_vars.iter() {
-                for (br, lamb) in cache {
-                    let val: f64 = lamb.iter().chain(br.iter()).product();
-                    let val = val
-                        * (lamb.iter())
-                            .map(|li| {
+            for (&nuc, vars) in cache.iter() {
+                for (br, lamb) in vars {
+                    *res.entry(nuc).or_insert(0.) += lamb[1..].iter().product::<f64>()
+                        * br.iter().product::<f64>()
+                        * (lamb.iter().enumerate())
+                            .map(|(i, &li)| {
                                 (-li * dt).exp()
-                                    / (lamb.iter().map(|lj| lj - li))
-                                        .filter(|v| v != &0.)
+                                    / (lamb.iter().enumerate().filter(|(j, _)| i != *j))
+                                        .map(|(_, &lj)| lj - li)
                                         .product::<f64>()
                             })
                             .sum::<f64>();
-                    *res.entry(nuc).or_insert(0.) += val;
                 }
             }
 
@@ -104,28 +101,28 @@ where
     }
 
     // Variables for calculate with Bateman Equation
-    fn decay_vars(&self, parent: Nuclide) -> Option<CachedNode> {
+    fn cached_vars(&self, parent: Nuclide) -> Option<CachedNode> {
         let cache = self.cache.read().unwrap();
 
-        if let Some(decay_vars) = cache.get(&parent) {
-            Some(decay_vars.clone())
+        if let Some(brs_lambs) = cache.get(&parent) {
+            Some(brs_lambs.clone())
         } else {
             drop(cache);
 
             let mut stack = vec![(parent, vec![], vec![self.decay_data.lambda(parent).ok()?])];
-            let mut decay_vars = BTreeMap::new();
+            let mut brs_lambs = BTreeMap::new();
 
             while let Some((parent, br, lambda)) = stack.pop() {
-                decay_vars.entry(parent).or_insert(vec![]).push((
-                    br.iter().take(max(0usize, br.len() - 1)).copied().collect(),
-                    lambda.clone(),
-                ));
+                brs_lambs
+                    .entry(parent)
+                    .or_insert(vec![])
+                    .push((br.clone(), lambda.clone()));
 
                 for daughter in self.decay_data.progeny(parent).unwrap() {
-                    let mut br = br.clone();
-                    br.push(daughter.branch_rate);
-                    let mut lambda = lambda.clone();
                     if let Ok(lambda_d) = self.decay_data.lambda(daughter.nuclide) {
+                        let mut br = br.clone();
+                        br.push(daughter.branch_rate);
+                        let mut lambda = lambda.clone();
                         lambda.push(lambda_d);
                         stack.push((daughter.nuclide, br, lambda));
                     }
@@ -133,10 +130,113 @@ where
             }
 
             let mut cache = self.cache.write().unwrap();
-            let decay_vars = Arc::new(decay_vars);
-            cache.insert(parent, decay_vars.clone());
+            let brs_lambs = Arc::new(brs_lambs);
+            cache.insert(parent, brs_lambs.clone());
 
-            Some(decay_vars)
+            Some(brs_lambs)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::{
+        error::Error,
+        primitive::{DecayModeFlagSet, Progeny},
+    };
+
+    struct TestData {
+        progeny: BTreeMap<Nuclide, Vec<Progeny>>,
+    }
+
+    impl TestData {
+        fn new() -> Arc<Self> {
+            let mut progeny = BTreeMap::new();
+
+            macro_rules! insert_progeny {
+                ($n:expr, $d:expr, $br:expr) => {
+                    progeny.insert(
+                        $n.parse().unwrap(),
+                        vec![Progeny {
+                            nuclide: $d.parse().unwrap(),
+                            branch_rate: $br,
+                            decay_mode: DecayModeFlagSet::default(),
+                        }],
+                    )
+                };
+
+                ($n:expr) => {
+                    progeny.insert($n.parse().unwrap(), vec![])
+                };
+            }
+
+            insert_progeny!("Nb-99", "Mo-99", 0.7);
+            insert_progeny!("Mo-99", "Tc-99m", 0.3);
+            insert_progeny!("Tc-99m");
+
+            Arc::new(Self { progeny })
+        }
+    }
+
+    impl NuclideProgeny for TestData {
+        fn progeny(
+            &self,
+            nuclide: Nuclide,
+        ) -> Result<&[crate::primitive::Progeny], crate::error::Error> {
+            self.progeny
+                .get(&nuclide)
+                .map(|v| v.as_slice())
+                .ok_or(Error::InvalidNuclide(nuclide.to_string()))
+        }
+    }
+
+    impl DecayConstant for TestData {
+        fn lambda(&self, nuclide: Nuclide) -> Result<f64, crate::error::Error> {
+            if nuclide == "Nb-99".parse().unwrap() {
+                Ok(2.0_f64.ln())
+            } else if nuclide == "Mo-99".parse().unwrap() {
+                Ok(2.0_f64.ln() / 2.)
+            } else if nuclide == "Tc-99m".parse().unwrap() {
+                Ok(2.0_f64.ln() / 4.)
+            } else {
+                Err(Error::InvalidNuclide(nuclide.to_string()))
+            }
+        }
+    }
+
+    #[test]
+    fn bateman_solver() {
+        let data = TestData::new();
+        let solver = BatemanDecaySolver::new(data);
+
+        let mut inv = Inventory::new();
+        inv.add("Nb-99".parse().unwrap(), 1.0);
+
+        let res = solver.decay(&inv, 1.0);
+
+        let l1 = 2.0_f64.ln();
+        let l2 = 2.0_f64.ln() / 2.;
+        let l3 = 2.0_f64.ln() / 4.;
+
+        let br1 = 0.7;
+        let br2 = 0.3;
+
+        assert_eq!(res.get(&"Nb-99".parse().unwrap()), Some(&((-l1).exp())));
+        assert_eq!(
+            res.get(&"Mo-99".parse().unwrap()),
+            Some(&(l2 * br1 * ((-l1).exp() / (l2 - l1) + (-l2).exp() / (l1 - l2))))
+        );
+        assert_eq!(
+            res.get(&"Tc-99m".parse().unwrap()),
+            Some(
+                &((l2 * l3)
+                    * (br1 * br2)
+                    * ((-l1).exp() / ((l2 - l1) * (l3 - l1))
+                        + (-l2).exp() / ((l1 - l2) * (l3 - l2))
+                        + (-l3).exp() / ((l1 - l3) * (l2 - l3))))
+            )
+        );
     }
 }
