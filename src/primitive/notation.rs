@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 use crate::primitive::attr::AtomicMass;
-use crate::primitive::parser::molecular;
+use crate::primitive::parser::compound;
 
 #[rustfmt::skip]
 #[repr(u8)]
@@ -39,12 +39,12 @@ serde_plain::derive_fromstr_from_deserialize!(Symbol, |e| -> Error {
 serde_plain::derive_display_from_serialize!(Symbol);
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Molecular {
+pub enum Compound {
     Element(Symbol, u32),
-    Compound(Vec<Molecular>, u32),
+    Molecule(Vec<Compound>, u32),
 }
 
-impl Display for Molecular {
+impl Display for Compound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Element(symbol, n) => {
@@ -53,7 +53,7 @@ impl Display for Molecular {
                     write!(f, "{}", n)?;
                 }
             }
-            Self::Compound(g, mul) => {
+            Self::Molecule(g, mul) => {
                 if mul != &1 {
                     write!(f, "(")?;
                 }
@@ -69,24 +69,21 @@ impl Display for Molecular {
     }
 }
 
-impl FromStr for Molecular {
+impl FromStr for Compound {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        molecular()
-            .then_ignore(end())
-            .parse(s)
-            .map_err(|e| e.into())
+        compound().then_ignore(end()).parse(s).map_err(|e| e.into())
     }
 }
 
-impl Molecular {
+impl Compound {
     pub fn composition(&self) -> BTreeMap<Symbol, u32> {
         let mut comp = BTreeMap::new();
 
         match self {
             Self::Element(symbol, n) => *comp.entry(*symbol).or_insert(0) += n,
-            Self::Compound(g, mul) => {
+            Self::Molecule(g, mul) => {
                 for el in g {
                     for (symbol, n) in el.composition().iter() {
                         *comp.entry(*symbol).or_insert(0) += mul * n;
@@ -123,7 +120,7 @@ where
 
     pub fn formula(mut self, formula: &str) -> Result<Self, Error> {
         let molecular = formula
-            .parse::<Molecular>()
+            .parse::<Compound>()
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         let composition: BTreeMap<Symbol, f64> = molecular
             .composition()
@@ -257,7 +254,7 @@ mod test {
 
     #[test]
     fn molecular() {
-        let ether: Molecular = "(C2H5)2O".parse().unwrap();
+        let ether: Compound = "(C2H5)2O".parse().unwrap();
 
         assert_eq!(format!("{}", ether), "(C2H5)2O");
         assert_eq!(ether.composition().get(&Symbol::H), Some(&10));

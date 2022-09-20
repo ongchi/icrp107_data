@@ -1,7 +1,7 @@
 use chumsky::prelude::{filter, just, recursive, text, Parser, Simple};
 use chumsky::text::TextParser;
 
-use super::notation::{Molecular, Symbol};
+use super::notation::{Compound, Symbol};
 use super::nuclide::{DecayMode, DecayModeFlagSet, HalfLife, MetastableState, Nuclide, TimeUnit};
 
 pub fn symbol() -> impl Parser<char, Symbol, Error = Simple<char>> {
@@ -77,7 +77,7 @@ pub fn decaymodeflags() -> impl Parser<char, DecayModeFlagSet, Error = Simple<ch
     })
 }
 
-pub fn molecular() -> impl Parser<char, Molecular, Error = Simple<char>> {
+pub fn compound() -> impl Parser<char, Compound, Error = Simple<char>> {
     let number = filter(|c: &char| c.is_ascii_digit())
         .repeated()
         .map(|s| s.into_iter().collect::<String>().parse().unwrap_or(1));
@@ -85,11 +85,11 @@ pub fn molecular() -> impl Parser<char, Molecular, Error = Simple<char>> {
     let compound = recursive(|expr| {
         symbol()
             .then(number)
-            .map(|(s, n)| Molecular::Element(s, n))
+            .map(|(s, n)| Compound::Element(s, n))
             .or(expr
                 .delimited_by(just('('), just(')'))
                 .then(number)
-                .map(|(mole, n)| Molecular::Compound(mole, n)))
+                .map(|(mole, n)| Compound::Molecule(mole, n)))
             .repeated()
             .at_least(1)
     });
@@ -98,7 +98,7 @@ pub fn molecular() -> impl Parser<char, Molecular, Error = Simple<char>> {
         if mole.len() == 1 {
             mole.into_iter().next().unwrap()
         } else {
-            Molecular::Compound(mole, 1)
+            Compound::Molecule(mole, 1)
         }
     })
 }
@@ -201,20 +201,20 @@ mod test {
     }
 
     #[test]
-    fn parse_molecular() {
-        let ether = molecular().parse("(C2H5)2O").unwrap();
+    fn parse_compound() {
+        let ether = compound().parse("(C2H5)2O").unwrap();
         assert_eq!(
             ether,
-            Molecular::Compound(
+            Compound::Molecule(
                 vec![
-                    Molecular::Compound(
+                    Compound::Molecule(
                         vec![
-                            Molecular::Element(Symbol::C, 2),
-                            Molecular::Element(Symbol::H, 5),
+                            Compound::Element(Symbol::C, 2),
+                            Compound::Element(Symbol::H, 5),
                         ],
                         2
                     ),
-                    Molecular::Element(Symbol::O, 1)
+                    Compound::Element(Symbol::O, 1)
                 ],
                 1
             )

@@ -30,6 +30,11 @@ where
     }
 }
 
+pub trait Atom {
+    fn symbol(&self) -> Symbol;
+    fn nuclide(&self) -> Nuclide;
+}
+
 pub trait AtomicMass {
     /// Atomic mass (amu)
     fn atomic_mass(&self, symbol: Symbol) -> Result<f64, Error>;
