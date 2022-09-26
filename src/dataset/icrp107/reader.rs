@@ -55,7 +55,7 @@ where
 
         let mut buf = String::new();
         while self.reader.read_line(&mut buf)? != 0 {
-            let nuclide: Nuclide = (&buf[0..7]).parse()?;
+            let nuclide: Nuclide = (buf[0..7]).parse()?;
             let records = &buf[7..].replace('\0', " ");
             let records = records.split_whitespace().last().ok_or_else(|| {
                 Error::Unexpected(anyhow::anyhow!("failed to get spectrum for {}", nuclide))

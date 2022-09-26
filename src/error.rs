@@ -26,12 +26,10 @@ pub enum Error {
     InvalidEnergy(Energy),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        e.into()
-    }
+    #[error(transparent)]
+    StdIoError(#[from] std::io::Error),
+    #[error("invalid path")]
+    InvalidPath,
 }
 
 impl From<Vec<Simple<char>>> for Error {

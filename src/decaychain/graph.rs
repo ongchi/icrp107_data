@@ -5,7 +5,7 @@ use float_pretty_print::PrettyPrintFloat;
 use petgraph::{graph::NodeIndex, Graph};
 
 use crate::primitive::attr::{NuclideHalfLife, NuclideProgeny};
-use crate::primitive::{DecayModeFlagSet, HalfLife, Nuclide};
+use crate::primitive::{DecayModeSet, HalfLife, Nuclide};
 
 #[derive(Clone, Copy)]
 pub struct ChainNode {
@@ -30,13 +30,13 @@ impl std::fmt::Display for ChainNode {
 #[derive(Clone)]
 pub struct ChainEdge {
     branch_rate: f64,
-    decay_mode: DecayModeFlagSet,
+    decay_mode: DecayModeSet,
 }
 
 impl std::fmt::Display for ChainEdge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", PrettyPrintFloat(self.branch_rate))?;
-        for (i, mode) in self.decay_mode.into_iter().enumerate() {
+        for (i, mode) in self.decay_mode.0.into_iter().enumerate() {
             if i == 0 {
                 write!(f, "{}", mode)?;
             } else {
@@ -95,25 +95,22 @@ where
                 Nuclide::WithId(_) => {
                     visited.insert(parent);
 
-                    match self.data.progeny(parent).ok() {
-                        Some(progeny) => {
-                            let p_node = get_or_insert_node(parent);
-                            for daughter in progeny {
-                                {
-                                    if !visited.contains(&daughter.nuclide) {
-                                        stack.push(daughter.nuclide)
-                                    }
-
-                                    let d_node = get_or_insert_node(daughter.nuclide);
-                                    let weight = ChainEdge {
-                                        branch_rate: daughter.branch_rate,
-                                        decay_mode: daughter.decay_mode,
-                                    };
-                                    edges.push((p_node, d_node, weight));
+                    if let Ok(progeny) = self.data.progeny(parent) {
+                        let p_node = get_or_insert_node(parent);
+                        for daughter in progeny {
+                            {
+                                if !visited.contains(&daughter.nuclide) {
+                                    stack.push(daughter.nuclide)
                                 }
+
+                                let d_node = get_or_insert_node(daughter.nuclide);
+                                let weight = ChainEdge {
+                                    branch_rate: daughter.branch_rate,
+                                    decay_mode: daughter.decay_mode,
+                                };
+                                edges.push((p_node, d_node, weight));
                             }
                         }
-                        None => {}
                     };
                 }
                 Nuclide::FissionProducts => {}
@@ -131,7 +128,7 @@ where
 mod test {
     use super::*;
     use crate::error::Error;
-    use crate::primitive::{DecayMode, DecayModeFlagSet, Progeny, TimeUnit};
+    use crate::primitive::{DecayMode, DecayModeSet, Progeny, TimeUnit};
 
     struct TestData {
         pub mo99: Nuclide,
@@ -147,7 +144,7 @@ mod test {
             let progeny = Progeny {
                 nuclide: tc99m,
                 branch_rate: 1.0,
-                decay_mode: DecayModeFlagSet::default() | "IT".parse::<DecayMode>().unwrap(),
+                decay_mode: DecayModeSet::default() | "IT".parse::<DecayMode>().unwrap(),
             };
 
             Self {
@@ -177,9 +174,9 @@ mod test {
     }
 
     impl NuclideProgeny for TestData {
-        fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error> {
+        fn progeny(&self, nuclide: Nuclide) -> Result<Vec<Progeny>, Error> {
             if nuclide == self.mo99 {
-                Ok(&self.progeny)
+                Ok(self.progeny.clone())
             } else {
                 Err(Error::InvalidNuclide("not found".to_string()))
             }
@@ -216,7 +213,7 @@ mod test {
         assert_eq!(edges[0].weight.branch_rate, 1.0);
         assert_eq!(
             edges[0].weight.decay_mode,
-            DecayModeFlagSet::default() | DecayMode::IsometricTransition
+            DecayModeSet::default() | DecayMode::IsometricTransition
         );
     }
 }

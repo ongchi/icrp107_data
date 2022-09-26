@@ -13,53 +13,64 @@ use crate::primitive::{HalfLife, Nuclide, Progeny};
 use reader::{IndexReader, SpectrumReader};
 use spectrum::{ack, bet, nsf, rad};
 
-static NDX: OnceCell<HashMap<Nuclide, ndx::Attribute>> = OnceCell::new();
-static RAD: OnceCell<HashMap<Nuclide, Vec<rad::RadSpectrum>>> = OnceCell::new();
-static BET: OnceCell<HashMap<Nuclide, Vec<bet::BetSpectrum>>> = OnceCell::new();
-static ACK: OnceCell<HashMap<Nuclide, Vec<ack::AckSpectrum>>> = OnceCell::new();
-static NSF: OnceCell<HashMap<Nuclide, Vec<nsf::NsfSpectrum>>> = OnceCell::new();
-
 pub struct Icrp107 {
     path: PathBuf,
+    ndx: OnceCell<HashMap<Nuclide, ndx::Attribute>>,
+    rad: OnceCell<HashMap<Nuclide, Vec<rad::RadSpectrum>>>,
+    bet: OnceCell<HashMap<Nuclide, Vec<bet::BetSpectrum>>>,
+    ack: OnceCell<HashMap<Nuclide, Vec<ack::AckSpectrum>>>,
+    nsf: OnceCell<HashMap<Nuclide, Vec<nsf::NsfSpectrum>>>,
 }
 
 impl Icrp107 {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, Error> {
-        let path = path.as_ref().to_path_buf();
+        let path_buf = path.as_ref().to_path_buf();
 
-        if path.is_dir() {
-            Ok(Arc::new(Self { path }))
+        if path_buf.is_dir() {
+            Ok(Arc::new(Self {
+                path: path_buf,
+                ndx: OnceCell::new(),
+                rad: OnceCell::new(),
+                bet: OnceCell::new(),
+                ack: OnceCell::new(),
+                nsf: OnceCell::new(),
+            }))
         } else {
-            Err(Error::Unexpected(anyhow::anyhow!("Invalid data path")))
+            Err(Error::InvalidPath)
         }
     }
 
     pub fn ndx(&self) -> Result<&HashMap<Nuclide, ndx::Attribute>, Error> {
-        NDX.get_or_try_init(|| IndexReader::new(&self.path.join("ICRP-07.NDX"))?.read())
+        self.ndx
+            .get_or_try_init(|| IndexReader::new(&self.path.join("ICRP-07.NDX"))?.read())
     }
 
     pub fn rad(&self) -> Result<&HashMap<Nuclide, Vec<rad::RadSpectrum>>, Error> {
-        RAD.get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.RAD"))?.read())
+        self.rad
+            .get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.RAD"))?.read())
     }
 
     pub fn bet(&self) -> Result<&HashMap<Nuclide, Vec<bet::BetSpectrum>>, Error> {
-        BET.get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.BET"))?.read())
+        self.bet
+            .get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.BET"))?.read())
     }
 
     pub fn ack(&self) -> Result<&HashMap<Nuclide, Vec<ack::AckSpectrum>>, Error> {
-        ACK.get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.ACK"))?.read())
+        self.ack
+            .get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.ACK"))?.read())
     }
 
     pub fn nsf(&self) -> Result<&HashMap<Nuclide, Vec<nsf::NsfSpectrum>>, Error> {
-        NSF.get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.NSF"))?.read())
+        self.nsf
+            .get_or_try_init(|| SpectrumReader::new(&self.path.join("ICRP-07.NSF"))?.read())
     }
 }
 
 impl NuclideProgeny for Icrp107 {
-    fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error> {
+    fn progeny(&self, nuclide: Nuclide) -> Result<Vec<Progeny>, Error> {
         self.ndx()?
             .get(&nuclide)
-            .map(|attr| attr.progeny.as_slice())
+            .map(|attr| attr.progeny.clone())
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
 }

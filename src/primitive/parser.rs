@@ -1,8 +1,9 @@
 use chumsky::prelude::{filter, just, recursive, text, Parser, Simple};
 use chumsky::text::TextParser;
+use flagset::FlagSet;
 
 use super::notation::{Compound, Symbol};
-use super::nuclide::{DecayMode, DecayModeFlagSet, HalfLife, MetastableState, Nuclide, TimeUnit};
+use super::nuclide::{DecayMode, HalfLife, MetastableState, Nuclide, TimeUnit};
 
 pub fn symbol() -> impl Parser<char, Symbol, Error = Simple<char>> {
     filter(|c: &char| c.is_ascii_uppercase())
@@ -69,12 +70,10 @@ pub fn decaymode() -> impl Parser<char, DecayMode, Error = Simple<char>> {
     a.or(bm.or(bp.or(ec.or(it.or(sf)))))
 }
 
-pub fn decaymodeflags() -> impl Parser<char, DecayModeFlagSet, Error = Simple<char>> {
-    decaymode().repeated().map(|modes| {
-        modes
-            .into_iter()
-            .fold(DecayModeFlagSet::default(), |a, b| a | b)
-    })
+pub fn decaymodeflags() -> impl Parser<char, FlagSet<DecayMode>, Error = Simple<char>> {
+    decaymode()
+        .repeated()
+        .map(|modes| modes.into_iter().fold(FlagSet::default(), |a, b| a | b))
 }
 
 pub fn compound() -> impl Parser<char, Compound, Error = Simple<char>> {
@@ -150,6 +149,14 @@ pub fn halflife() -> impl Parser<char, HalfLife, Error = Simple<char>> {
         .map(|(value, unit)| HalfLife { value, unit })
 }
 
+pub fn gi_absorption_factor() -> impl Parser<char, (f64, String), Error = Simple<char>> {
+    let compound = filter(|c: &char| c.is_ascii_alphanumeric())
+        .repeated()
+        .map(|s| s.into_iter().collect::<String>());
+
+    float().padded().then(compound)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -181,7 +188,7 @@ mod test {
         let mode = decaymodeflags().parse("AB-B+ECITSF").unwrap();
         assert_eq!(
             mode,
-            DecayModeFlagSet::default()
+            FlagSet::default()
                 | DecayMode::Alpha
                 | DecayMode::BetaMinus
                 | DecayMode::BetaPlus
@@ -193,10 +200,7 @@ mod test {
         let mode_with_padding = decaymodeflags().parse("A B- β+ ").unwrap();
         assert_eq!(
             mode_with_padding,
-            DecayModeFlagSet::default()
-                | DecayMode::Alpha
-                | DecayMode::BetaMinus
-                | DecayMode::BetaPlus
+            FlagSet::default() | DecayMode::Alpha | DecayMode::BetaMinus | DecayMode::BetaPlus
         );
     }
 

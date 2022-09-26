@@ -144,7 +144,7 @@ mod test {
 
     use crate::{
         error::Error,
-        primitive::{DecayModeFlagSet, Progeny},
+        primitive::{DecayModeSet, Progeny},
     };
 
     struct TestData {
@@ -162,7 +162,7 @@ mod test {
                         vec![Progeny {
                             nuclide: $d.parse().unwrap(),
                             branch_rate: $br,
-                            decay_mode: DecayModeFlagSet::default(),
+                            decay_mode: DecayModeSet::default(),
                         }],
                     )
                 };
@@ -181,19 +181,16 @@ mod test {
     }
 
     impl NuclideProgeny for TestData {
-        fn progeny(
-            &self,
-            nuclide: Nuclide,
-        ) -> Result<&[crate::primitive::Progeny], crate::error::Error> {
+        fn progeny(&self, nuclide: Nuclide) -> Result<Vec<Progeny>, Error> {
             self.progeny
                 .get(&nuclide)
-                .map(|v| v.as_slice())
+                .map(|v| v.clone())
                 .ok_or(Error::InvalidNuclide(nuclide.to_string()))
         }
     }
 
     impl DecayConstant for TestData {
-        fn lambda(&self, nuclide: Nuclide) -> Result<f64, crate::error::Error> {
+        fn lambda(&self, nuclide: Nuclide) -> Result<f64, Error> {
             if nuclide == "Nb-99".parse().unwrap() {
                 Ok(2.0_f64.ln())
             } else if nuclide == "Mo-99".parse().unwrap() {

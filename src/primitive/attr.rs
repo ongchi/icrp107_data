@@ -8,7 +8,7 @@ use crate::error::Error;
 pub type Energy = u32;
 
 pub trait NuclideProgeny {
-    fn progeny(&self, nuclide: Nuclide) -> Result<&[Progeny], Error>;
+    fn progeny(&self, nuclide: Nuclide) -> Result<Vec<Progeny>, Error>;
 }
 
 pub trait NuclideHalfLife {

@@ -13,7 +13,7 @@ use super::notation::Symbol;
 use super::parser::{halflife, nuclide};
 use crate::error::Error;
 
-pub use decay_mode::{DecayMode, DecayModeFlagSet};
+pub use decay_mode::{DecayMode, DecayModeSet};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord, DeserializeFromStr)]
 pub enum Nuclide {
@@ -94,10 +94,11 @@ serde_plain::derive_display_from_serialize!(MetastableState);
 pub struct Progeny {
     pub nuclide: Nuclide,
     pub branch_rate: f64,
-    pub decay_mode: DecayModeFlagSet,
+    pub decay_mode: DecayModeSet,
 }
 
 pub mod decay_mode {
+    use std::ops::BitOr;
     use std::str::FromStr;
 
     use chumsky::prelude::{end, Parser};
@@ -106,8 +107,6 @@ pub mod decay_mode {
 
     use crate::error::Error;
     use crate::primitive::parser::{decaymode, decaymodeflags};
-
-    pub type DecayModeFlagSet = FlagSet<DecayMode>;
 
     flags! {
         #[derive(Deserialize)]
@@ -155,14 +154,50 @@ pub mod decay_mode {
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DecayModeFlagSet, D::Error>
+    #[derive(Debug, Default, Clone, Copy, Deserialize, PartialEq, Eq)]
+    pub struct DecayModeSet(
+        #[serde(deserialize_with = "self::deserialize")] pub FlagSet<DecayMode>,
+    );
+
+    impl BitOr<DecayMode> for DecayModeSet {
+        type Output = Self;
+
+        fn bitor(self, rhs: DecayMode) -> Self::Output {
+            let mut mode = self;
+            mode.0 = self.0 | rhs;
+            mode
+        }
+    }
+
+    impl std::fmt::Display for DecayModeSet {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut modes = vec![];
+            if self.0.contains(DecayMode::Alpha) {
+                modes.push(DecayMode::Alpha.to_string());
+            } else if self.0.contains(DecayMode::BetaMinus) {
+                modes.push(DecayMode::BetaMinus.to_string());
+            } else if self.0.contains(DecayMode::BetaPlus) {
+                modes.push(DecayMode::BetaPlus.to_string());
+            } else if self.0.contains(DecayMode::ElectronCapture) {
+                modes.push(DecayMode::ElectronCapture.to_string());
+            } else if self.0.contains(DecayMode::IsometricTransition) {
+                modes.push(DecayMode::IsometricTransition.to_string());
+            } else if self.0.contains(DecayMode::SpontaneousFission) {
+                modes.push(DecayMode::SpontaneousFission.to_string());
+            }
+
+            write!(f, "{}", modes.join("|"))
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<FlagSet<DecayMode>, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         struct DecayModeVisitor;
 
         impl<'de> Visitor<'de> for DecayModeVisitor {
-            type Value = DecayModeFlagSet;
+            type Value = FlagSet<DecayMode>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("A|B-|B+|EC|IT|SF")

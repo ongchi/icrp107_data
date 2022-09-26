@@ -1,17 +1,16 @@
 use fixed_width::{FieldSet, FixedWidth};
+use flagset::FlagSet;
 use serde::Deserialize;
 
 use super::reader;
 use crate::error::Error;
-use crate::primitive::nuclide::decay_mode;
-use crate::primitive::{DecayMode, DecayModeFlagSet, HalfLife, Nuclide, Progeny};
+use crate::primitive::{DecayMode, DecayModeSet, HalfLife, Nuclide, Progeny};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct NdxEntry {
     pub nuclide: Nuclide,
     pub half_life: HalfLife,
-    #[serde(with = "decay_mode")]
-    pub decay_mode: DecayModeFlagSet,
+    pub decay_mode: DecayModeSet,
     pub progeny: Vec<Option<(Nuclide, f64)>>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
@@ -41,7 +40,7 @@ impl FixedWidth for NdxEntry {
 #[serde(from = "NdxEntry")]
 pub struct Attribute {
     pub half_life: HalfLife,
-    pub decay_mode: DecayModeFlagSet,
+    pub decay_mode: DecayModeSet,
     pub progeny: Vec<Progeny>,
     pub alpha_energy: f64,
     pub electron_energy: f64,
@@ -64,29 +63,28 @@ impl FixedWidth for Attribute {
 
 impl From<NdxEntry> for Attribute {
     fn from(entry: NdxEntry) -> Attribute {
-        let mut progeny = vec![];
-
-        for daughter in entry.progeny {
-            match daughter {
-                Some((nuclide, branch_rate)) => {
-                    let decay_mode = match nuclide {
-                        Nuclide::WithId(_) => {
-                            check_decay_mode(entry.nuclide, nuclide, entry.decay_mode).unwrap()
-                        }
-                        Nuclide::FissionProducts => {
-                            DecayModeFlagSet::default() | DecayMode::SpontaneousFission
-                        }
-                    };
-
-                    progeny.push(Progeny {
-                        nuclide,
-                        branch_rate,
-                        decay_mode,
-                    })
+        let progeny = entry
+            .progeny
+            .into_iter()
+            .flatten()
+            .map(|(nuclide, branch_rate)| {
+                let decay_mode = match nuclide {
+                    Nuclide::WithId(_) => {
+                        check_decay_mode(entry.nuclide, nuclide, entry.decay_mode).unwrap()
+                    }
+                    Nuclide::FissionProducts => {
+                        let mut mode_set = DecayModeSet::default();
+                        mode_set.0 |= DecayMode::SpontaneousFission;
+                        mode_set
+                    }
+                };
+                Progeny {
+                    nuclide,
+                    branch_rate,
+                    decay_mode,
                 }
-                None => {}
-            }
-        }
+            })
+            .collect();
 
         Attribute {
             half_life: entry.half_life,
@@ -110,33 +108,34 @@ impl From<NdxEntry> for Attribute {
 fn check_decay_mode(
     parent: Nuclide,
     daughter: Nuclide,
-    decay_mode: DecayModeFlagSet,
-) -> Result<DecayModeFlagSet, Error> {
+    decay_mode: DecayModeSet,
+) -> Result<DecayModeSet, Error> {
     let z = parent.z().unwrap();
     let d_z = daughter.z().unwrap();
     let a = parent.a().unwrap();
     let d_a = daughter.a().unwrap();
 
-    let mut mode = DecayModeFlagSet::default();
+    let mut mode = FlagSet::default();
 
     if z == d_z && a == d_a {
-        mode |= DecayMode::IsometricTransition & decay_mode;
+        mode |= DecayMode::IsometricTransition & decay_mode.0;
     } else if z == d_z + 2 && a == d_a + 4 {
-        mode |= DecayMode::Alpha & decay_mode;
+        mode |= DecayMode::Alpha & decay_mode.0;
     } else if z + 1 == d_z && a == d_a {
-        mode |= DecayMode::BetaMinus & decay_mode;
+        mode |= DecayMode::BetaMinus & decay_mode.0;
     } else if z == d_z + 1 && a == d_a {
-        mode |= (DecayMode::BetaPlus | DecayMode::ElectronCapture) & decay_mode;
+        mode |= (DecayMode::BetaPlus | DecayMode::ElectronCapture) & decay_mode.0;
     }
 
     if mode.is_empty() {
         Err(Error::Unexpected(anyhow::anyhow!(
-            "unexpected decay mode: {} -> {}",
+            "{} -> {}: unexpected decay mode {:?}",
             parent,
-            daughter
+            daughter,
+            mode
         )))
     } else {
-        Ok(mode)
+        Ok(DecayModeSet(mode))
     }
 }
 

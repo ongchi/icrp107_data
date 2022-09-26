@@ -7,4 +7,4 @@ pub use attr::{
     AtomicMass, DecayConstant, MassAttenuationCoefficient, NuclideHalfLife, NuclideProgeny,
 };
 pub use notation::{Material, MaterialBuilder, Symbol};
-pub use nuclide::{DecayMode, DecayModeFlagSet, HalfLife, Nuclide, Progeny, TimeUnit};
+pub use nuclide::{DecayMode, DecayModeSet, HalfLife, Nuclide, Progeny, TimeUnit};
