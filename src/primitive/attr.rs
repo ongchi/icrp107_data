@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use super::dose_coefficient::{
+    AgeGroup, IngestionDoseCoefficientValue, InhalationDoseCoefficientValue, Organ,
+};
 use super::notation::{Material, Symbol};
 use super::nuclide::{HalfLife, Nuclide, Progeny};
 use crate::error::Error;
@@ -96,4 +99,22 @@ pub fn z_eff(composition: &BTreeMap<Symbol, f64>) -> f64 {
     }
 
     zeff.powf(2.94f64.recip())
+}
+
+pub trait IngestionDoseCoefficient {
+    fn ingestion_dose_coefficients(
+        &self,
+        nuclide: Nuclide,
+        age_group: AgeGroup,
+        organ: Organ,
+    ) -> Result<Vec<IngestionDoseCoefficientValue>, Error>;
+}
+
+pub trait InhalationDoseCoefficient {
+    fn inhalation_dose_coefficients(
+        &self,
+        nuclide: Nuclide,
+        age_group: AgeGroup,
+        organ: Organ,
+    ) -> Result<Vec<InhalationDoseCoefficientValue>, Error>;
 }

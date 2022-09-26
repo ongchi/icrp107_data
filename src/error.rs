@@ -30,6 +30,10 @@ pub enum Error {
     StdIoError(#[from] std::io::Error),
     #[error("invalid path")]
     InvalidPath,
+    #[error("invalid mdb file")]
+    InvalidMdbFile,
+    #[error(transparent)]
+    MdbSqlError(#[from] mdbsql::Error),
 }
 
 impl From<Vec<Simple<char>>> for Error {

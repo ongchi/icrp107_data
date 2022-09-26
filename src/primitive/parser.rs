@@ -263,4 +263,13 @@ mod test {
             }
         )
     }
+
+    #[test]
+    fn parse_gi_absorption_factor() {
+        let f1_1 = gi_absorption_factor().parse("1OBT").unwrap();
+        assert_eq!(f1_1, (1., "OBT".to_string()));
+
+        let f1_2 = gi_absorption_factor().parse("1 CH4").unwrap();
+        assert_eq!(f1_2, (1., "CH4".to_string()));
+    }
 }
