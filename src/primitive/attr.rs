@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::dose_coefficient::{
-    AgeGroup, IngestionDoseCoefficientValue, InhalationDoseCoefficientValue, Organ,
-};
+use super::dose_coefficient::{AgeGroup, IntExpDcf, Organ};
 use super::notation::{Material, Symbol};
 use super::nuclide::{HalfLife, Nuclide, Progeny};
 use crate::error::Error;
@@ -101,13 +99,69 @@ pub fn z_eff(composition: &BTreeMap<Symbol, f64>) -> f64 {
     zeff.powf(2.94f64.recip())
 }
 
+pub trait AirSubmersionDoseCoefficient {
+    fn air_submersion_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait WaterSubmersionDoseCoefficient {
+    fn water_submersion_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait GroundSurfaceDoseCoefficient {
+    fn ground_surface_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait SoilOneCmDoseCoefficient {
+    fn soil_1cm_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait SoilFiveCmDoseCoefficient {
+    fn soil_5cm_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait SoilFifteenCmDoseCoefficient {
+    fn soil_15cm_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
+pub trait SoilInfiniteDoseCoefficient {
+    fn soil_infinite_dose_coefficient(
+        &self,
+        nuclide: Nuclide,
+        organ: Organ,
+    ) -> Result<Option<f64>, Error>;
+}
+
 pub trait IngestionDoseCoefficient {
     fn ingestion_dose_coefficients(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IngestionDoseCoefficientValue>, Error>;
+    ) -> Result<Vec<IntExpDcf>, Error>;
 }
 
 pub trait InhalationDoseCoefficient {
@@ -116,5 +170,5 @@ pub trait InhalationDoseCoefficient {
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<InhalationDoseCoefficientValue>, Error>;
+    ) -> Result<Vec<IntExpDcf>, Error>;
 }

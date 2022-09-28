@@ -3,19 +3,18 @@ use std::path::Path;
 use chumsky::Parser;
 use mdbsql::Connection;
 
+use crate::dataset::radtoolbox::utils::AsAgeDepPhantomOrgan;
 use crate::error::Error;
 use crate::primitive::attr::{IngestionDoseCoefficient, InhalationDoseCoefficient};
-use crate::primitive::dose_coefficient::{
-    AgeGroup, IngestionDoseCoefficientValue, InhalationDoseCoefficientValue, Organ,
-};
+use crate::primitive::dose_coefficient::{AgeGroup, BiokineticAttr, IntExpDcf, Organ};
 use crate::primitive::parser::gi_absorption_factor;
 use crate::primitive::Nuclide;
 
-pub struct RadtoolsIcrp72 {
+pub struct Icrp72 {
     connection: Connection,
 }
 
-impl RadtoolsIcrp72 {
+impl Icrp72 {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         Ok(Self {
             connection: Connection::open(path)?,
@@ -23,70 +22,69 @@ impl RadtoolsIcrp72 {
     }
 }
 
-impl IngestionDoseCoefficient for RadtoolsIcrp72 {
+impl IngestionDoseCoefficient for Icrp72 {
     fn ingestion_dose_coefficients(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IngestionDoseCoefficientValue>, Error> {
-        match age_group {
-            AgeGroup::Worker => Ok(vec![]),
-            _ => {
-                let rows = self.connection.prepare(&format!(
-                    "SELECT {}, f1 FROM \"Ingestion {}\" WHERE Nuclide='{}'",
-                    organ, age_group, nuclide
-                ))?;
+    ) -> Result<Vec<IntExpDcf>, Error> {
+        let rows = self.connection.prepare(&format!(
+            "SELECT {}, f1 FROM \"Ingestion {}\" WHERE Nuclide='{}'",
+            organ.to_col()?,
+            age_group,
+            nuclide
+        ))?;
 
-                let mut res = vec![];
-                for row in rows {
-                    let value = row.get(0)?;
-                    let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(1)?)?;
-                    res.push(IngestionDoseCoefficientValue {
-                        value,
-                        f1,
-                        compound,
-                    })
-                }
-
-                Ok(res)
-            }
+        let mut res = vec![];
+        for row in rows {
+            let value = row.get(0)?;
+            let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(1)?)?;
+            res.push(IntExpDcf {
+                value,
+                bio_attr: BiokineticAttr {
+                    f1,
+                    compound,
+                    ..Default::default()
+                },
+            })
         }
+
+        Ok(res)
     }
 }
 
-impl InhalationDoseCoefficient for RadtoolsIcrp72 {
+impl InhalationDoseCoefficient for Icrp72 {
     fn inhalation_dose_coefficients(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<crate::primitive::dose_coefficient::InhalationDoseCoefficientValue>, Error>
-    {
-        match age_group {
-            AgeGroup::Worker => Ok(vec![]),
-            _ => {
-                let rows = self.connection.prepare(&format!(
-                    "SELECT {}, Type, f1 FROM \"Inhalation {}\" WHERE Nuclide='{}'",
-                    organ, age_group, nuclide
-                ))?;
+    ) -> Result<Vec<IntExpDcf>, Error> {
+        let rows = self.connection.prepare(&format!(
+            "SELECT {}, Type, f1 FROM \"Inhalation {}\" WHERE Nuclide='{}'",
+            organ.to_col()?,
+            age_group,
+            nuclide
+        ))?;
 
-                let mut res = vec![];
-                for row in rows {
-                    let value = row.get(0)?;
-                    let absorption_type = row.get(1)?;
-                    let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(2)?)?;
-                    res.push(InhalationDoseCoefficientValue {
-                        value,
-                        absorption_type,
-                        f1,
-                        compound,
-                    })
-                }
-
-                Ok(res)
-            }
+        let mut res = vec![];
+        for row in rows {
+            let value = row.get(0)?;
+            let pulmonary_absorption_type = row.get(1)?;
+            let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(2)?)?;
+            res.push(IntExpDcf {
+                value,
+                bio_attr: BiokineticAttr {
+                    f1,
+                    compound,
+                    pulmonary_absorption_type,
+                    ..Default::default()
+                },
+            })
         }
+
+        Ok(res)
     }
 }
 
@@ -100,23 +98,32 @@ mod test {
     #[test]
     #[ignore]
     fn ingestion_h3() {
-        let db = RadtoolsIcrp72::open(DATA_PATH).unwrap();
+        let db = Icrp72::open(DATA_PATH).unwrap();
         let results = db
-            .ingestion_dose_coefficients("H-3".parse().unwrap(), AgeGroup::Adult, Organ::Effective)
+            .ingestion_dose_coefficients(
+                "H-3".parse().unwrap(),
+                AgeGroup::Adult,
+                Organ::EffectiveDose,
+            )
             .unwrap();
 
         assert_eq!(
             results,
             vec![
-                IngestionDoseCoefficientValue {
+                IntExpDcf {
                     value: 4.2e-11,
-                    f1: 1.0,
-                    compound: "OBT".to_string(),
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        compound: "OBT".to_string(),
+                        ..Default::default()
+                    }
                 },
-                IngestionDoseCoefficientValue {
+                IntExpDcf {
                     value: 1.8e-11,
-                    f1: 1.0,
-                    compound: "".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        ..Default::default()
+                    }
                 }
             ]
         );
@@ -125,55 +132,77 @@ mod test {
     #[test]
     #[ignore]
     fn inhalation_h3() {
-        let db = RadtoolsIcrp72::open(DATA_PATH).unwrap();
+        let db = Icrp72::open(DATA_PATH).unwrap();
         let results = db
-            .inhalation_dose_coefficients("H-3".parse().unwrap(), AgeGroup::Adult, Organ::Effective)
+            .inhalation_dose_coefficients(
+                "H-3".parse().unwrap(),
+                AgeGroup::Adult,
+                Organ::EffectiveDose,
+            )
             .unwrap();
 
         assert_eq!(
             results,
             vec![
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 4.1e-11,
-                    absorption_type: PulmonaryAbsorptionType::Vapour,
-                    f1: 1.,
-                    compound: "OBT".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        compound: "OBT".to_string(),
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Vapor),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 1.8e-15,
-                    absorption_type: PulmonaryAbsorptionType::Vapour,
-                    f1: 1.,
-                    compound: "HT".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        compound: "HT".to_string(),
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Vapor),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 1.8e-13,
-                    absorption_type: PulmonaryAbsorptionType::Vapour,
-                    f1: 1.,
-                    compound: "CH3T".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        compound: "CH3T".to_string(),
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Vapor),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 1.8e-11,
-                    absorption_type: PulmonaryAbsorptionType::Vapour,
-                    f1: 1.,
-                    compound: "HTO".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        compound: "HTO".to_string(),
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Vapor),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 6.2e-12,
-                    absorption_type: PulmonaryAbsorptionType::Fast,
-                    f1: 1.,
-                    compound: "".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 1.,
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Fast),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 4.5e-11,
-                    absorption_type: PulmonaryAbsorptionType::Moderate,
-                    f1: 0.1,
-                    compound: "".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 0.1,
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Moderate),
+                        ..Default::default()
+                    }
                 },
-                InhalationDoseCoefficientValue {
+                IntExpDcf {
                     value: 2.6e-10,
-                    absorption_type: PulmonaryAbsorptionType::Slow,
-                    f1: 0.01,
-                    compound: "".to_string()
+                    bio_attr: BiokineticAttr {
+                        f1: 0.01,
+                        pulmonary_absorption_type: Some(PulmonaryAbsorptionType::Slow),
+                        ..Default::default()
+                    }
                 },
             ]
         );

@@ -1,6 +1,9 @@
 use chumsky::prelude::Simple;
 
-use crate::primitive::attr::Energy;
+use crate::primitive::{
+    attr::Energy,
+    dose_coefficient::{AgeGroup, Organ},
+};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -24,6 +27,10 @@ pub enum Error {
     InvalidInteger(String),
     #[error("invalid energy: {0}")]
     InvalidEnergy(Energy),
+    #[error("invalid age group: {0}")]
+    InvalidAgeGroup(AgeGroup),
+    #[error("invalid organ: {0}")]
+    InvalidOrgan(Organ),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
     #[error(transparent)]

@@ -5,8 +5,13 @@ pub mod nuclide;
 pub mod parser;
 
 pub use attr::{
-    AtomicMass, DecayConstant, IngestionDoseCoefficient, InhalationDoseCoefficient,
-    MassAttenuationCoefficient, NuclideHalfLife, NuclideProgeny,
+    AirSubmersionDoseCoefficient, AtomicMass, DecayConstant, GroundSurfaceDoseCoefficient,
+    IngestionDoseCoefficient, InhalationDoseCoefficient, MassAttenuationCoefficient,
+    NuclideHalfLife, NuclideProgeny, SoilFifteenCmDoseCoefficient, SoilFiveCmDoseCoefficient,
+    SoilInfiniteDoseCoefficient, SoilOneCmDoseCoefficient, WaterSubmersionDoseCoefficient,
+};
+pub use dose_coefficient::{
+    AgeGroup, BiokineticAttr, ClearanceClass, IntExpDcf, Organ, PulmonaryAbsorptionType,
 };
 pub use notation::{Material, MaterialBuilder, Symbol};
 pub use nuclide::{DecayMode, DecayModeSet, HalfLife, Nuclide, Progeny, TimeUnit};
