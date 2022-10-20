@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use super::dose_coefficient::{AgeGroup, IntExpDcf, Organ};
 use super::notation::{Material, Symbol};
 use super::nuclide::{HalfLife, Nuclide, Progeny};
+use super::DecayModeSet;
 use crate::error::Error;
 
 /// Energy in eV
@@ -15,6 +16,10 @@ pub trait NuclideProgeny {
 pub trait NuclideHalfLife {
     // Half life (arbitrary unit)
     fn half_life(&self, nuclide: Nuclide) -> Result<HalfLife, Error>;
+}
+
+pub trait NuclideDecayMode {
+    fn decay_mode(&self, nuclide: Nuclide) -> Result<DecayModeSet, Error>;
 }
 
 pub trait DecayConstant {

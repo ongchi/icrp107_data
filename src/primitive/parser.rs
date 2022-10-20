@@ -168,6 +168,9 @@ mod test {
 
         let he = symbol().parse("He").unwrap();
         assert_eq!(he, Symbol::He);
+
+        let cc = symbol().parse("Cc");
+        assert!(cc.is_err());
     }
 
     #[test]
@@ -180,6 +183,9 @@ mod test {
 
         let tc99m_from_id = nuclide().parse("430990001").unwrap();
         assert_eq!(tc99m_from_id, Nuclide::WithId(43_099_0001));
+
+        let cc99 = nuclide().parse("Cc-99");
+        assert!(cc99.is_err());
     }
 
     #[test]

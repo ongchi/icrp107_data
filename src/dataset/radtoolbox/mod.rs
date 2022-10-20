@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 
@@ -18,15 +17,15 @@ pub struct RadToolbox3 {
 }
 
 impl RadToolbox3 {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let root_path = path.as_ref().to_path_buf();
         if root_path.is_dir() {
-            Ok(Arc::new(Self {
+            Ok(Self {
                 root_path,
                 fgr12: OnceCell::new(),
                 icrp68: OnceCell::new(),
                 icrp72: OnceCell::new(),
-            }))
+            })
         } else {
             Err(Error::Unexpected(anyhow::anyhow!("Invalid data path")))
         }

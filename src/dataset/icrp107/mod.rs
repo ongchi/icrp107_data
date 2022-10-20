@@ -5,14 +5,14 @@ mod spectrum;
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use crate::error::Error;
-use crate::primitive::attr::{NuclideHalfLife, NuclideProgeny};
-use crate::primitive::{HalfLife, Nuclide, Progeny};
+use crate::primitive::attr::{NuclideDecayMode, NuclideHalfLife, NuclideProgeny};
+use crate::primitive::{DecayModeSet, HalfLife, Nuclide, Progeny};
 use reader::{IndexReader, SpectrumReader};
 use spectrum::{ack, bet, nsf, rad};
 
+#[derive(Debug)]
 pub struct Icrp107 {
     path: PathBuf,
     ndx: OnceCell<HashMap<Nuclide, ndx::Attribute>>,
@@ -23,18 +23,18 @@ pub struct Icrp107 {
 }
 
 impl Icrp107 {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Arc<Self>, Error> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let path_buf = path.as_ref().to_path_buf();
 
         if path_buf.is_dir() {
-            Ok(Arc::new(Self {
+            Ok(Self {
                 path: path_buf,
                 ndx: OnceCell::new(),
                 rad: OnceCell::new(),
                 bet: OnceCell::new(),
                 ack: OnceCell::new(),
                 nsf: OnceCell::new(),
-            }))
+            })
         } else {
             Err(Error::InvalidPath)
         }
@@ -80,6 +80,15 @@ impl NuclideHalfLife for Icrp107 {
         self.ndx()?
             .get(&nuclide)
             .map(|attr| attr.half_life)
+            .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
+    }
+}
+
+impl NuclideDecayMode for Icrp107 {
+    fn decay_mode(&self, nuclide: Nuclide) -> Result<DecayModeSet, Error> {
+        self.ndx()?
+            .get(&nuclide)
+            .map(|attr| attr.decay_mode)
             .ok_or_else(|| Error::InvalidNuclide(nuclide.to_string()))
     }
 }

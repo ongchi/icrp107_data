@@ -72,7 +72,10 @@ impl FromStr for Nuclide {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        nuclide().then_ignore(end()).parse(s).map_err(|e| e.into())
+        nuclide()
+            .then_ignore(end())
+            .parse(s)
+            .map_err(|_| Error::InvalidNuclide(s.to_string()))
     }
 }
 
@@ -325,6 +328,9 @@ mod test {
 
         let tc99m: Nuclide = "Tc-99m".parse().unwrap();
         assert_eq!(tc99m.id().unwrap(), 430990001);
+
+        let cc99: Result<Nuclide, Error> = "Cc-99".parse();
+        assert!(cc99.is_err());
     }
 
     #[test]

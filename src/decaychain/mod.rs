@@ -44,6 +44,7 @@ impl Default for Inventory {
 type CachedNode = Arc<BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>>;
 type CachedData = RwLock<BTreeMap<Nuclide, CachedNode>>;
 
+#[derive(Debug)]
 pub struct BatemanDecaySolver<D> {
     decay_data: Arc<D>,
     pub cache: CachedData,
@@ -76,7 +77,7 @@ where
     }
 
     // Bateman Equation
-    fn bateman_eq(&self, nuclide: Nuclide, dt: f64) -> Option<BTreeMap<Nuclide, f64>> {
+    pub fn bateman_eq(&self, nuclide: Nuclide, dt: f64) -> Option<BTreeMap<Nuclide, f64>> {
         if let Some(cache) = self.cached_vars(nuclide) {
             let mut res = BTreeMap::new();
             for (&nuc, vars) in cache.iter() {
@@ -108,6 +109,7 @@ where
             Some(brs_lambs.clone())
         } else {
             drop(cache);
+            let mut cache = self.cache.write().unwrap();
 
             let mut stack = vec![(parent, vec![], vec![self.decay_data.lambda(parent).ok()?])];
             let mut brs_lambs = BTreeMap::new();
@@ -129,7 +131,6 @@ where
                 }
             }
 
-            let mut cache = self.cache.write().unwrap();
             let brs_lambs = Arc::new(brs_lambs);
             cache.insert(parent, brs_lambs.clone());
 

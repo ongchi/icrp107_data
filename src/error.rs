@@ -43,6 +43,7 @@ pub enum Error {
     MdbSqlError(#[from] mdbsql::Error),
 }
 
+// fixme: remove this impl
 impl From<Vec<Simple<char>>> for Error {
     fn from(e: Vec<Simple<char>>) -> Self {
         e.into()
