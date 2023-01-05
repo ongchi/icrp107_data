@@ -9,6 +9,7 @@ pub mod icrp68;
 pub mod icrp72;
 mod utils;
 
+#[derive(Debug)]
 pub struct RadToolbox3 {
     root_path: PathBuf,
     fgr12: OnceCell<fgr12::Fgr12>,

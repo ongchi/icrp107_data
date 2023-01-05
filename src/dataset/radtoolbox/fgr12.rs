@@ -13,6 +13,7 @@ use crate::primitive::{
     SoilInfiniteDoseCoefficient, SoilOneCmDoseCoefficient, WaterSubmersionDoseCoefficient,
 };
 
+#[derive(Debug)]
 pub struct Fgr12 {
     connection: Connection,
 }

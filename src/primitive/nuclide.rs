@@ -354,7 +354,7 @@ mod test {
     }
 
     fn isclose(a: f64, b: f64) -> bool {
-        (a - b).abs() <= 1e-8 + 1e-5 * b.abs()
+        (a - b).abs() <= f64::EPSILON
     }
 
     #[test]

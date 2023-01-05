@@ -10,6 +10,7 @@ use crate::primitive::dose_coefficient::{AgeGroup, BiokineticAttr, IntExpDcf, Or
 use crate::primitive::parser::gi_absorption_factor;
 use crate::primitive::Nuclide;
 
+#[derive(Debug)]
 pub struct Icrp68 {
     connection: Connection,
 }
