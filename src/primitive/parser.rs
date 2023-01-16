@@ -30,12 +30,16 @@ pub fn nuclide() -> impl Parser<char, Nuclide, Error = Simple<char>> {
 
     let meta = filter(|c: &char| c.is_ascii_alphabetic())
         .repeated()
-        .map(|meta| {
-            meta.into_iter()
-                .collect::<String>()
-                .parse::<MetastableState>()
-                .map(|m| m as u32)
-                .unwrap_or(0)
+        .at_most(1)
+        .try_map(|meta, span| {
+            let meta = meta.into_iter().collect::<String>();
+            if !meta.is_empty() {
+                meta.parse::<MetastableState>()
+                    .map_err(|e| Simple::custom(span, format!("{}", e)))
+                    .map(|m| m as u32)
+            } else {
+                Ok(0)
+            }
         });
 
     let with_name = sf.or(symbol
@@ -183,6 +187,9 @@ mod test {
 
         let tc99m_from_id = nuclide().parse("430990001").unwrap();
         assert_eq!(tc99m_from_id, Nuclide::WithId(43_099_0001));
+
+        let tc99o = nuclide().parse("Tc-99o");
+        assert!(tc99o.is_err());
 
         let cc99 = nuclide().parse("Cc-99");
         assert!(cc99.is_err());
