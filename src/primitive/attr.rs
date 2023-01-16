@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use super::dose_coefficient::{AgeGroup, IntExpDcf, Organ};
+use super::dose_coefficient::{AgeGroup, DcfValue, Organ};
 use super::notation::{Material, Symbol};
 use super::nuclide::{HalfLife, Nuclide, Progeny};
 use super::DecayModeSet;
@@ -104,76 +104,61 @@ pub fn z_eff(composition: &BTreeMap<Symbol, f64>) -> f64 {
     zeff.powf(2.94f64.recip())
 }
 
-pub trait AirSubmersionDoseCoefficient {
-    fn air_submersion_dose_coefficient(
+/// Air submersion dose conversion factor
+pub trait DcfAirSubmersion {
+    fn dcf_air_submersion(&self, nuclide: Nuclide, organ: Organ)
+        -> Result<Option<DcfValue>, Error>;
+}
+
+/// Water immersion dose conversion factor
+pub trait DcfWaterImmersion {
+    fn dcf_water_immersion(
         &self,
         nuclide: Nuclide,
         organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+    ) -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait WaterSubmersionDoseCoefficient {
-    fn water_submersion_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+/// Ground surface irradiation dose conversion factor
+pub trait DcfGroundSurface {
+    fn dcf_ground_surface(&self, nuclide: Nuclide, organ: Organ)
+        -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait GroundSurfaceDoseCoefficient {
-    fn ground_surface_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+/// Soil (1cm) irradiation dose conversion factor
+pub trait DcfSoilOneCm {
+    fn dcf_soil_1cm(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait SoilOneCmDoseCoefficient {
-    fn soil_1cm_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+/// Soil (5cm) irradiation dose conversion factor
+pub trait DcfSoilFiveCm {
+    fn dcf_soil_5cm(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait SoilFiveCmDoseCoefficient {
-    fn soil_5cm_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+/// Soil (15cm) irradiation dose conversion factor
+pub trait DcfSoilFifteenCm {
+    fn dcf_soil_15cm(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait SoilFifteenCmDoseCoefficient {
-    fn soil_15cm_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
+/// Soil irradiation dose conversion factor
+pub trait DcfSoilInfinite {
+    fn dcf_soil_infinite(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<DcfValue>, Error>;
 }
 
-pub trait SoilInfiniteDoseCoefficient {
-    fn soil_infinite_dose_coefficient(
-        &self,
-        nuclide: Nuclide,
-        organ: Organ,
-    ) -> Result<Option<f64>, Error>;
-}
-
-pub trait IngestionDoseCoefficient {
-    fn ingestion_dose_coefficients(
+pub trait DcfIngestion {
+    fn dcf_ingestion(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IntExpDcf>, Error>;
+    ) -> Result<Vec<DcfValue>, Error>;
 }
 
-pub trait InhalationDoseCoefficient {
-    fn inhalation_dose_coefficients(
+pub trait DcfInhalation {
+    fn dcf_inhalation(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IntExpDcf>, Error>;
+    ) -> Result<Vec<DcfValue>, Error>;
 }

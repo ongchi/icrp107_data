@@ -1,9 +1,6 @@
 use chumsky::prelude::Simple;
 
-use crate::primitive::{
-    attr::Energy,
-    dose_coefficient::{AgeGroup, Organ},
-};
+use crate::primitive::attr::Energy;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -28,15 +25,17 @@ pub enum Error {
     #[error("invalid energy: {0}")]
     InvalidEnergy(Energy),
     #[error("invalid age group: {0}")]
-    InvalidAgeGroup(AgeGroup),
+    InvalidAgeGroup(String),
+    #[error("invalid pathway: {0}")]
+    InvalidPathway(String),
     #[error("invalid organ: {0}")]
-    InvalidOrgan(Organ),
+    InvalidOrgan(String),
     #[error(transparent)]
     Unexpected(#[from] anyhow::Error),
     #[error(transparent)]
     StdIoError(#[from] std::io::Error),
-    #[error("invalid path")]
-    InvalidPath,
+    #[error("invalid file path")]
+    InvalidFilePath,
     #[error("invalid mdb file")]
     InvalidMdbFile,
     #[error(transparent)]

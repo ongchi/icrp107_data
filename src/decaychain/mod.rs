@@ -41,13 +41,13 @@ impl Default for Inventory {
     }
 }
 
-type CachedNode = Arc<BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>>;
-type CachedData = RwLock<BTreeMap<Nuclide, CachedNode>>;
+type CachedNode = BTreeMap<Nuclide, Vec<(Vec<f64>, Vec<f64>)>>;
+type CachedData = BTreeMap<Nuclide, Arc<CachedNode>>;
 
 #[derive(Debug)]
 pub struct BatemanDecaySolver<D> {
     decay_data: Arc<D>,
-    pub cache: CachedData,
+    pub cache: RwLock<CachedData>,
 }
 
 impl<D> BatemanDecaySolver<D>
@@ -102,7 +102,7 @@ where
     }
 
     // Variables for calculate with Bateman Equation
-    fn cached_vars(&self, parent: Nuclide) -> Option<CachedNode> {
+    fn cached_vars(&self, parent: Nuclide) -> Option<Arc<CachedNode>> {
         let cache = self.cache.read().unwrap();
 
         if let Some(brs_lambs) = cache.get(&parent) {
@@ -112,12 +112,13 @@ where
             let mut cache = self.cache.write().unwrap();
 
             let mut stack = vec![(parent, vec![], vec![self.decay_data.lambda(parent).ok()?])];
-            let mut brs_lambs = BTreeMap::new();
+            let mut brs_lambs: CachedNode = BTreeMap::new();
 
             while let Some((parent, br, lambda)) = stack.pop() {
                 brs_lambs
                     .entry(parent)
-                    .or_insert(vec![])
+                    // .or_insert(vec![])
+                    .or_default()
                     .push((br.clone(), lambda.clone()));
 
                 for daughter in self.decay_data.progeny(parent).unwrap() {

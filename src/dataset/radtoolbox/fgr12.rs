@@ -5,12 +5,13 @@ use mdbsql::Connection;
 
 use crate::dataset::radtoolbox::utils::AsAdultPhantomOrgan;
 use crate::error::Error;
-use crate::primitive::dose_coefficient::{AgeGroup, BiokineticAttr, IntExpDcf, Organ};
+use crate::primitive::dose_coefficient::{
+    AgeGroup, BiokineticAttr, DcfValue, Organ, RespiratoryTractAttr,
+};
 use crate::primitive::parser::gi_absorption_factor;
 use crate::primitive::{
-    AirSubmersionDoseCoefficient, GroundSurfaceDoseCoefficient, IngestionDoseCoefficient,
-    InhalationDoseCoefficient, Nuclide, SoilFifteenCmDoseCoefficient, SoilFiveCmDoseCoefficient,
-    SoilInfiniteDoseCoefficient, SoilOneCmDoseCoefficient, WaterSubmersionDoseCoefficient,
+    DcfAirSubmersion, DcfGroundSurface, DcfIngestion, DcfInhalation, DcfSoilFifteenCm,
+    DcfSoilFiveCm, DcfSoilInfinite, DcfSoilOneCm, DcfWaterImmersion, Nuclide,
 };
 
 #[derive(Debug)]
@@ -27,8 +28,8 @@ impl Fgr12 {
 }
 
 macro_rules! ext_dcf_fn {
-    ($fn:ident, $table:expr) => {
-        fn $fn(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<f64>, Error> {
+    ($fn:ident, $table:expr, $unit:expr) => {
+        fn $fn(&self, nuclide: Nuclide, organ: Organ) -> Result<Option<DcfValue>, Error> {
             if let Some(row) = self
                 .connection
                 .prepare(&format!(
@@ -38,7 +39,11 @@ macro_rules! ext_dcf_fn {
                 ))?
                 .next()
             {
-                Ok(Some(row.get(0)?))
+                Ok(Some(DcfValue {
+                    value: row.get(0)?,
+                    unit: $unit.to_string(),
+                    attr: None,
+                }))
             } else {
                 Ok(None)
             }
@@ -46,41 +51,41 @@ macro_rules! ext_dcf_fn {
     };
 }
 
-impl AirSubmersionDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(air_submersion_dose_coefficient, "Air Submersion");
+impl DcfAirSubmersion for Fgr12 {
+    ext_dcf_fn!(dcf_air_submersion, "Air Submersion", "Sv/hr per Bq/m3");
 }
 
-impl WaterSubmersionDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(water_submersion_dose_coefficient, "Water Submersion");
+impl DcfWaterImmersion for Fgr12 {
+    ext_dcf_fn!(dcf_water_immersion, "Water Submersion", "Sv/hr per Bq/m3");
 }
 
-impl GroundSurfaceDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(ground_surface_dose_coefficient, "Ground Surface");
+impl DcfGroundSurface for Fgr12 {
+    ext_dcf_fn!(dcf_ground_surface, "Ground Surface", "Sv/hr per Bq/m2");
 }
 
-impl SoilOneCmDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(soil_1cm_dose_coefficient, "1 cm Soil");
+impl DcfSoilOneCm for Fgr12 {
+    ext_dcf_fn!(dcf_soil_1cm, "1 cm Soil", "Sv/hr per Bq/m3");
 }
 
-impl SoilFiveCmDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(soil_5cm_dose_coefficient, "5 cm Soil");
+impl DcfSoilFiveCm for Fgr12 {
+    ext_dcf_fn!(dcf_soil_5cm, "5 cm Soil", "Sv/hr per Bq/m3");
 }
 
-impl SoilFifteenCmDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(soil_15cm_dose_coefficient, "15 cm Soil");
+impl DcfSoilFifteenCm for Fgr12 {
+    ext_dcf_fn!(dcf_soil_15cm, "15 cm Soil", "Sv/hr per Bq/m3");
 }
 
-impl SoilInfiniteDoseCoefficient for Fgr12 {
-    ext_dcf_fn!(soil_infinite_dose_coefficient, "Infinite Soil");
+impl DcfSoilInfinite for Fgr12 {
+    ext_dcf_fn!(dcf_soil_infinite, "Infinite Soil", "Sv/hr per Bq/m3");
 }
 
-impl IngestionDoseCoefficient for Fgr12 {
-    fn ingestion_dose_coefficients(
+impl DcfIngestion for Fgr12 {
+    fn dcf_ingestion(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IntExpDcf>, Error> {
+    ) -> Result<Vec<DcfValue>, Error> {
         match age_group {
             AgeGroup::Worker => {
                 let rows = self.connection.prepare(&format!(
@@ -92,15 +97,15 @@ impl IngestionDoseCoefficient for Fgr12 {
                 let mut res = vec![];
                 for row in rows {
                     let value = row.get(0)?;
+                    let unit = "Sv/Bq".to_string();
                     let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(1)?)?;
-                    res.push(IntExpDcf {
-                        value,
-                        bio_attr: BiokineticAttr {
-                            f1,
-                            compound,
-                            ..Default::default()
-                        },
-                    })
+                    let attr = Some(BiokineticAttr {
+                        compound,
+                        f1,
+                        respiratory_tract_attr: None,
+                    });
+
+                    res.push(DcfValue { value, unit, attr })
                 }
 
                 Ok(res)
@@ -110,13 +115,13 @@ impl IngestionDoseCoefficient for Fgr12 {
     }
 }
 
-impl InhalationDoseCoefficient for Fgr12 {
-    fn inhalation_dose_coefficients(
+impl DcfInhalation for Fgr12 {
+    fn dcf_inhalation(
         &self,
         nuclide: Nuclide,
         age_group: AgeGroup,
         organ: Organ,
-    ) -> Result<Vec<IntExpDcf>, Error> {
+    ) -> Result<Vec<DcfValue>, Error> {
         match age_group {
             AgeGroup::Worker => {
                 let rows = self.connection.prepare(&format!(
@@ -128,17 +133,15 @@ impl InhalationDoseCoefficient for Fgr12 {
                 let mut res = vec![];
                 for row in rows {
                     let value = row.get(0)?;
-                    let clearance_class = row.get(1)?;
+                    let unit = "Sv/Bq".to_string();
+                    let respiratory_tract_attr = Some(RespiratoryTractAttr::ICRP30(row.get(1)?));
                     let (f1, compound) = gi_absorption_factor().parse(row.get::<String>(2)?)?;
-                    res.push(IntExpDcf {
-                        value,
-                        bio_attr: BiokineticAttr {
-                            f1,
-                            compound,
-                            clearance_class,
-                            ..Default::default()
-                        },
-                    })
+                    let attr = Some(BiokineticAttr {
+                        compound,
+                        f1,
+                        respiratory_tract_attr,
+                    });
+                    res.push(DcfValue { value, unit, attr })
                 }
 
                 Ok(res)
@@ -160,10 +163,10 @@ mod test {
     fn air_submersion_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .air_submersion_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_air_submersion("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(9.28e-17));
+        assert_eq!(result.unwrap().value, 9.28e-17);
     }
 
     #[test]
@@ -171,10 +174,10 @@ mod test {
     fn water_submersion_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .water_submersion_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_water_immersion("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(1.04e-19));
+        assert_eq!(result.unwrap().value, 1.04e-19);
     }
 
     #[test]
@@ -182,10 +185,10 @@ mod test {
     fn ground_surface_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .ground_surface_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_ground_surface("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(2.99e-18));
+        assert_eq!(result.unwrap().value, 2.99e-18);
     }
 
     #[test]
@@ -193,10 +196,10 @@ mod test {
     fn soil_1cm_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .soil_1cm_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_soil_1cm("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(2.07e-21));
+        assert_eq!(result.unwrap().value, 2.07e-21);
     }
 
     #[test]
@@ -204,10 +207,10 @@ mod test {
     fn soil_5cm_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .soil_5cm_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_soil_5cm("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(3.62e-21));
+        assert_eq!(result.unwrap().value, 3.62e-21);
     }
 
     #[test]
@@ -215,10 +218,10 @@ mod test {
     fn soil_15cm_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .soil_15cm_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_soil_15cm("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(4.4e-21));
+        assert_eq!(result.unwrap().value, 4.4e-21);
     }
 
     #[test]
@@ -226,10 +229,10 @@ mod test {
     fn soil_infinite_cs137() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let result = db
-            .soil_infinite_dose_coefficient("Cs-137".parse().unwrap(), Organ::EffectiveDose)
+            .dcf_soil_infinite("Cs-137".parse().unwrap(), Organ::EffectiveDose)
             .unwrap();
 
-        assert_eq!(result, Some(4.47e-21));
+        assert_eq!(result.unwrap().value, 4.47e-21);
     }
 
     #[test]
@@ -237,7 +240,7 @@ mod test {
     fn ingestion_h3() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let results = db
-            .ingestion_dose_coefficients(
+            .dcf_ingestion(
                 "H-3".parse().unwrap(),
                 AgeGroup::Worker,
                 Organ::EffectiveDoseEquivalent,
@@ -246,13 +249,15 @@ mod test {
 
         assert_eq!(
             results,
-            vec![IntExpDcf {
+            vec![DcfValue {
                 value: 1.73e-11,
-                bio_attr: BiokineticAttr {
+                unit: "Sv/Bq".to_string(),
+                attr: Some(BiokineticAttr {
+                    compound: "".to_string(),
                     f1: 1.,
-                    ..Default::default()
-                },
-            },]
+                    respiratory_tract_attr: None
+                }),
+            }]
         );
     }
 
@@ -261,7 +266,7 @@ mod test {
     fn inhalation_h3() {
         let db = Fgr12::open(DATA_PATH).unwrap();
         let results = db
-            .inhalation_dose_coefficients(
+            .dcf_inhalation(
                 "H-3".parse().unwrap(),
                 AgeGroup::Worker,
                 Organ::EffectiveDoseEquivalent,
@@ -270,13 +275,16 @@ mod test {
 
         assert_eq!(
             results,
-            vec![IntExpDcf {
+            vec![DcfValue {
                 value: 1.73e-11,
-                bio_attr: BiokineticAttr {
+                unit: "Sv/Bq".to_string(),
+                attr: Some(BiokineticAttr {
+                    compound: "".to_string(),
                     f1: 1.,
-                    clearance_class: Some(ClearanceClass::WaterVapor),
-                    ..Default::default()
-                },
+                    respiratory_tract_attr: Some(RespiratoryTractAttr::ICRP30(
+                        ClearanceClass::WaterVapor
+                    )),
+                }),
             },]
         );
     }

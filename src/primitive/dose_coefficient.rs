@@ -1,19 +1,42 @@
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Pathway {
+    AirSubmersion,
+    WaterImmersion,
+    GroundSurface,
+    SoilOneCm,
+    SoilFiveCm,
+    SoilFifteenCm,
+    SoilInfinite,
+    Ingestion,
+    Inhalation,
+}
+
+serde_plain::derive_display_from_serialize!(Pathway);
+serde_plain::derive_fromstr_from_deserialize!(Pathway, |e| -> Error {
+    Error::InvalidPathway(e.to_string())
+});
+
+#[derive(Debug, PartialEq)]
 pub struct BiokineticAttr {
-    /// Gastroinstestinal absorption factor
-    pub f1: f64,
     /// Chemical compound
     pub compound: String,
-    /// Pulmonary Absorption Type of respiratory tract model of ICRP 66
-    pub pulmonary_absorption_type: Option<PulmonaryAbsorptionType>,
-    /// Clearance class of respiratory tract model of ICRP 30
-    pub clearance_class: Option<ClearanceClass>,
+    /// Gastroinstestinal absorption factor
+    pub f1: f64,
+    /// Clearance class or pulmonary absorption type
+    pub respiratory_tract_attr: Option<RespiratoryTractAttr>,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum RespiratoryTractAttr {
+    ICRP30(ClearanceClass),
+    ICRP66(PulmonaryAbsorptionType),
 }
 
 /// Pulmonary Absorption Type of respiratory tract model of ICRP 66
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PulmonaryAbsorptionType {
     #[serde(rename = "F")]
     Fast,
@@ -28,7 +51,7 @@ pub enum PulmonaryAbsorptionType {
 serde_plain::derive_display_from_serialize!(PulmonaryAbsorptionType);
 
 /// Clearance class of respiratory tract model of ICRP 30
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ClearanceClass {
     #[serde(rename = "D")]
     Day,
@@ -48,7 +71,7 @@ pub enum ClearanceClass {
 
 serde_plain::derive_display_from_serialize!(ClearanceClass);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AgeGroup {
     /// From 0 to 1-year (Public)
     #[serde(rename = "Newborn")]
@@ -78,8 +101,11 @@ pub enum AgeGroup {
 }
 
 serde_plain::derive_display_from_serialize!(AgeGroup);
+serde_plain::derive_fromstr_from_deserialize!(AgeGroup, |e| -> Error {
+    Error::InvalidAgeGroup(e.to_string())
+});
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Organ {
     Adrenals,
     UrinaryBladder,
@@ -112,10 +138,14 @@ pub enum Organ {
 }
 
 serde_plain::derive_display_from_serialize!(Organ);
+serde_plain::derive_fromstr_from_deserialize!(Organ, |e| -> Error {
+    Error::InvalidOrgan(e.to_string())
+});
 
-/// Dose conversion factor of internal exposure (Sv/Bq)
+/// Dose conversion factor value
 #[derive(Debug, PartialEq)]
-pub struct IntExpDcf {
+pub struct DcfValue {
     pub value: f64,
-    pub bio_attr: BiokineticAttr,
+    pub unit: String,
+    pub attr: Option<BiokineticAttr>,
 }

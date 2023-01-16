@@ -36,7 +36,7 @@ impl Icrp107 {
                 nsf: OnceCell::new(),
             })
         } else {
-            Err(Error::InvalidPath)
+            Err(Error::InvalidFilePath)
         }
     }
 

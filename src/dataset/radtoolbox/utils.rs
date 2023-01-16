@@ -19,14 +19,14 @@ impl AsAdultPhantomOrgan for Organ {
             Organ::SmallIntestine => Ok("Small Intestine Wall".to_string()),
             Organ::UpperLargeIntestine => Ok("Upper Large IntestineWall".to_string()),
             Organ::LowerLargeIntestine => Ok("Lower Large IntestineWall".to_string()),
-            Organ::Colon => Err(Error::InvalidOrgan(self)),
+            Organ::Colon => Err(Error::InvalidOrgan(self.to_string())),
             Organ::Kidneys => Ok("Kidneys".to_string()),
             Organ::Liver => Ok("Liver".to_string()),
             Organ::Muscle => Ok("Muscle".to_string()),
             Organ::Ovaries => Ok("Ovaries".to_string()),
             Organ::Pancreas => Ok("Pancreas".to_string()),
             Organ::RedMarrow => Ok("Red Marrow".to_string()),
-            Organ::ExtrathoracicAirways => Err(Error::InvalidOrgan(self)),
+            Organ::ExtrathoracicAirways => Err(Error::InvalidOrgan(self.to_string())),
             Organ::Lungs => Ok("Lungs".to_string()),
             Organ::Skin => Ok("Skin".to_string()),
             Organ::Spleen => Ok("Spleen".to_string()),
@@ -34,7 +34,7 @@ impl AsAdultPhantomOrgan for Organ {
             Organ::Thymus => Ok("Thymus".to_string()),
             Organ::Thyroid => Ok("Thyroid".to_string()),
             Organ::Uterus => Ok("Uterus".to_string()),
-            Organ::Remainder => Err(Error::InvalidOrgan(self)),
+            Organ::Remainder => Err(Error::InvalidOrgan(self.to_string())),
             Organ::EffectiveDose => Ok("E".to_string()),
             Organ::EffectiveDoseEquivalent => Ok("h E".to_string()),
         }
@@ -76,7 +76,7 @@ impl AsAgeDepPhantomOrgan for Organ {
             Self::Uterus => Ok("Uterus".to_string()),
             Self::Remainder => Ok("Remainder".to_string()),
             Self::EffectiveDose => Ok("E".to_string()),
-            Self::EffectiveDoseEquivalent => Err(Error::InvalidOrgan(self)),
+            Self::EffectiveDoseEquivalent => Err(Error::InvalidOrgan(self.to_string())),
         }
     }
 }
