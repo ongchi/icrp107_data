@@ -66,9 +66,15 @@ impl DcfInhalation for Icrp72 {
         age_group: AgeGroup,
         organ: Organ,
     ) -> Result<Vec<DcfValue>, Error> {
+        let type_column = match age_group {
+            // The column named `Tye` in table `Inhalation 5 yr-old` is a typo, obviously.
+            AgeGroup::FiveYear => "Tye",
+            _ => "Type",
+        };
         let rows = self.connection.prepare(&format!(
-            "SELECT {}, Type, f1 FROM \"Inhalation {}\" WHERE Nuclide='{}'",
+            "SELECT {}, {}, f1 FROM \"Inhalation {}\" WHERE Nuclide='{}'",
             organ.to_col()?,
+            type_column,
             age_group,
             nuclide
         ))?;
