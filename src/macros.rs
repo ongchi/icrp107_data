@@ -1,12 +1,12 @@
-#[macro_export(inner)]
+#[macro_export]
 macro_rules! regex {
     ($re:literal $(,)?) => {{
-        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
         RE.get_or_init(|| regex::Regex::new($re).unwrap())
     }};
 }
 
-#[macro_export(inner)]
+#[macro_export]
 macro_rules! derive_from_str {
     ($type:ident) => {
         impl FromStr for $type {
