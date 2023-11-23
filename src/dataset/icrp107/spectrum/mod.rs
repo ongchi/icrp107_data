@@ -5,7 +5,7 @@ pub(super) mod rad;
 
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Deserialize, PartialEq, Eq)]
 pub enum RadiationType {
     #[serde(rename = "G")]
     Gamma,
@@ -34,6 +34,15 @@ pub enum RadiationType {
     FissionFragment,
     #[serde(rename = "N")]
     NeutronEmission,
+}
+
+impl RadiationType {
+    pub fn is_photon(self) -> bool {
+        match self {
+            Self::Gamma | Self::PromptGamma | Self::DelayedGamma | Self::X => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
