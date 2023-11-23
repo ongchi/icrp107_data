@@ -74,7 +74,7 @@ impl FromStr for Nuclide {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         nuclide()
             .then_ignore(end())
-            .parse(s)
+            .parse(s.trim())
             .map_err(|_| Error::InvalidNuclide(s.to_string()))
     }
 }
