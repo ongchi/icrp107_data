@@ -1,6 +1,6 @@
 mod ndx;
 mod reader;
-mod spectrum;
+pub mod spectrum;
 
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;

@@ -9,15 +9,15 @@ use crate::error::Error;
 #[derive(Debug, FixedWidth, Deserialize)]
 pub struct RadSpectrum {
     #[fixed_width(range = "26..29")]
-    r#type: RadiationType,
+    pub r#type: RadiationType,
 
     // yield (/nt)
     #[fixed_width(range = "2..14")]
-    r#yield: f64,
+    pub r#yield: f64,
 
     // energy of reaidation (MeV)
     #[fixed_width(range = "14..26")]
-    energy: f64,
+    pub energy: f64,
 }
 
 derive_from_str!(RadSpectrum);
