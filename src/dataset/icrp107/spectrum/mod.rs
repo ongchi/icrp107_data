@@ -39,7 +39,11 @@ pub enum RadiationType {
 impl RadiationType {
     pub fn is_photon(self) -> bool {
         match self {
-            Self::Gamma | Self::PromptGamma | Self::DelayedGamma | Self::X => true,
+            Self::Gamma
+            | Self::PromptGamma
+            | Self::DelayedGamma
+            | Self::X
+            | Self::AnnihilationPhoton => true,
             _ => false,
         }
     }
