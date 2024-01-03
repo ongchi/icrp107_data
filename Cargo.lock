@@ -324,9 +324,9 @@ dependencies = [
 
 [[package]]
 name = "mdbsql"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c396a60c5bda6c5f74ec805ed537581717a735a1a6291ae936413c85022a26f1"
+checksum = "15bc741ec6c2f95270c964cfcd8227de5df5297df86d3569565fd0245db570b8"
 dependencies = [
  "glib-sys",
  "libc",
